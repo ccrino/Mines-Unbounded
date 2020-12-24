@@ -1,0 +1,8 @@
+-- luacheck: std +love
+function love.conf(t)
+	t.window.width = 752
+	t.window.height = 792
+	t.console = true
+	t.identity = "MINES UNBOUNDED"
+	t.window.title = "M I N E S ∞"
+end
