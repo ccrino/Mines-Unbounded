@@ -13,6 +13,7 @@ local STATE = {
     FLAGGED = 2;
 }
 
+
 local VALUE = {
     MINE  = "*", [-1]="*", ["*"]=-1;
     NONE  = " ", [0]=" ", [" "]=0;
@@ -82,12 +83,25 @@ function love.load()
         {   type = "window";
             id = "win";
             layer = canvas.layers[1];
-            {
-                type = "button";
+            {   type = "textField";
+                id = "scoreLabel";
+                text = "0000000";
+                bg = { 48/255, 0/255, 64/255 };
+                dim = Theory:dim(19,2,9,2);
+                verticalAlign = "center";
+                horizontalAlign = "center";
+            },
+            {   type = "button";
                 id = "newButton";
                 command = "newGame";
                 style = Theory.styles.new;
                 dim = Theory:dim(3,43,9,5);
+            },
+            {   type = "button";
+                id = "saveButton";
+                command = "saveGame";
+                style = Theory.styles.new;
+                dim = Theory:dim(35,43,9,5)
             }
         }
     })
@@ -109,6 +123,7 @@ function love.load()
         mineWeight = 0.9999;
         cleared = 0;
         flagged = 0;
+        begun = false;
         menu = false;
         isGameOver = true;
         doCheckers = true;
@@ -121,19 +136,21 @@ function love.load()
         motionY = 0;
         time = 0;
     }
-    --[[
-    love.window.setMode(752,792,{
-        borderless = true;
-    })
-    --]]
 end
 
-function mine.startGame()
+function commands.newGame()
+    gameState.begun = false
     gameState.isGameOver = false
     gameState.flagged = 0
     gameState.cleared = 0
+    Theory.idDict["scoreLabel"]:setText("0000000")
     gameState.Cells = {}
     gameState.mineWeight = gameState.MINE_ESCALATION_RATE
+end
+
+function mine.endGame()
+    gameState.isGameOver = true
+    
 end
 
 function love.update(dt)
@@ -162,9 +179,12 @@ end
 function love.mousepressed(x, y, button)
     Theory:mousepressed(x, y, button)
 
-    local viewX = math.floor( x / gameState.SCALE )
-    local viewY = math.floor( y / gameState.SCALE )
+    local viewX, viewY = math.floor( x / gameState.SCALE ), math.floor( y / gameState.SCALE )
     local boardX, boardY = mine.viewToBoard(viewX, viewY)
+    
+    if boardX == math.huge or boardY == math.huge then
+        return
+    end
 
     if button == 1 then
         if not gameState.begun then
@@ -174,6 +194,7 @@ function love.mousepressed(x, y, button)
                 end
                 gameState.Cells[ly][lx] = mine.makeCell(true)
             end
+            newEmptyCell(boardX, boardY)
             mine.doNeighbor( boardX, boardY, newEmptyCell)
             gameState.begun = true
         end
@@ -283,6 +304,7 @@ function mine.revealCell( x, y )
 
     if cell.value == VALUE.MINE then
         cell.state = STATE.SEEN
+        mine.endGame()
         gameState.isGameOver = true
     else
         mine.calculateValue(x,y)
@@ -292,6 +314,11 @@ function mine.revealCell( x, y )
             cell.state = STATE.SEEN
             gameState.cleared = gameState.cleared+1
         end
+        local label = Theory.idDict["scoreLabel"]
+        local scoreStr = tostring(gameState.cleared)
+        local pad = 7 - string.len(scoreStr)
+        scoreStr = string.rep("0",pad) .. scoreStr
+        label:setText(scoreStr)
     end
 end
 
