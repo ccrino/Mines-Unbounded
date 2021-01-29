@@ -58,6 +58,92 @@ colors[6] = colors.magenta
 colors[7] = colors.pink
 colors[8] = colors.purple
 
+local colorIndex = 6;
+local ColorSets = {
+    { -- Anxiety
+        darkest = {  34/255,  19/255,  48/255 };
+        dark    = {  41/255,  52/255,  82/255 };
+        normal  = {  50/255,  84/255,  94/255 };
+        light   = {  68/255, 122/255,  90/255 };
+        lightest= {  84/255, 141/255,  88/255 };
+    },
+    { -- Sodas & Skateboards
+        darkest = { 131/255,  29/255, 128/255 };
+        dark    = { 109/255,  73/255, 168/255 };
+        normal  = {  86/255, 125/255, 195/255 };
+        light   = {  90/255, 182/255, 224/255 };
+        lightest= { 106/255, 227/255, 244/255 };
+    },
+    { -- Guidance
+        darkest = { 122/255, 105/255,  71/255 };
+        dark    = { 249/255, 234/255, 141/255 };
+        normal  = { 211/255, 216/255, 124/255 };
+        light   = { 174/255, 187/255, 105/255 };
+        lightest= { 140/255, 148/255,  88/255 };
+    },
+    { --constant rambling
+        darkest = { 237/255, 143/255, 139/255 };
+        dark    = { 243/255, 197/255, 164/255 };
+        normal  = { 251/255, 232/255, 198/255 };
+        light   = { 173/255, 214/255, 250/255 };
+        lightest= { 144/255, 201/255, 257/255 };
+    },
+    { --the sweetest chill
+        darkest = {  52/255,  52/255,  50/255 };
+        dark    = { 100/255,  91/255, 158/255 };
+        normal  = { 142/255, 132/255, 195/255 };
+        light   = { 197/255, 174/255, 228/255 };
+        lightest= { 228/255, 233/255, 230/255 };
+    },
+    { --saltwater tears
+        darkest = "#dbf4bf";
+        dark    = "#b7e4a1";
+        normal  = "#60a581";
+        light   = "#547b7d";
+        lightest= "#446c6c";
+    },
+    { --cherry soda
+        darkest = "#221206";
+        dark    = "#39160d";
+        normal  = "#781b24";
+        light   = "#932e44";
+        lightest= "#fcf3e4";
+    },
+    { --ominiferous
+        darkest = "#e9f1b6";
+        dark    = "#c1cb80";
+        normal  = "#bd9d7c";
+        light   = "#bb6582";
+        lightest= "#ab3b85";
+    },
+}
+
+for _, set in pairs(ColorSets) do
+    for color, str in pairs(set) do
+        if type(str) == "string" then
+            set[color] = {
+                tonumber(str:sub(2,3),16)/255;
+                tonumber(str:sub(4,5),16)/255;
+                tonumber(str:sub(6,7),16)/255;
+            }
+        end
+    end
+end
+
+local BaseColorSet = {
+    darkest = {   0/255,   0/255,  64/255 };
+    dark    = {   0/255,   0/255, 178/255 };
+    normal  = {   0/255,   0/255, 255/255 };
+    light   = {  51/255,  51/255, 255/255 };
+    lightest= { 102/255, 102/255, 255/255 };
+}
+
+function compareColor( color1, color2)
+    return math.floor(color1[1]*255) == math.floor(color2[1]*255)
+       and math.floor(color1[2]*255) == math.floor(color2[2]*255)
+       and math.floor(color1[3]*255) == math.floor(color2[3]*255)
+end
+
 function love.load()
     local font = love.graphics.newImageFont(
 		"cp437_16x16.png",
@@ -78,6 +164,44 @@ function love.load()
     local canvas = Theory:canvas("UnboundedFrame.xp",0,0)
     Theory:buttonStyle("new","New_Button_Style.xp")
 
+    local style = Theory.styles.new
+    for state in pairs(style.prototypes) do
+        if style.prototypes[state].layer then
+        for i = 1, style.prototypes[state].layer.height do
+            for j = 1, style.prototypes[state].layer.width do
+                local cell = style.prototypes[state].layer:getCell(j,i)
+            if cell then
+                if compareColor(cell.fg, BaseColorSet.darkest) or
+                    compareColor(cell.fg, {0,0,0}) then
+                    cell.fg = ColorSets[colorIndex].darkest
+                elseif compareColor(cell.fg, BaseColorSet.dark) then
+                    cell.fg = ColorSets[colorIndex].dark
+                elseif compareColor(cell.fg, BaseColorSet.normal) then
+                    cell.fg = ColorSets[colorIndex].normal
+                elseif compareColor(cell.fg, BaseColorSet.light) then
+                    cell.fg = ColorSets[colorIndex].light
+                elseif compareColor(cell.fg, BaseColorSet.lightest) then
+                    cell.fg = ColorSets[colorIndex].lightest
+                end
+                if compareColor(cell.bg, BaseColorSet.darkest) or
+                    compareColor(cell.bg, {0,0,0}) then
+                    cell.bg = ColorSets[colorIndex].darkest
+                elseif compareColor(cell.bg, BaseColorSet.dark) then
+                    cell.bg = ColorSets[colorIndex].dark
+                elseif compareColor(cell.bg, BaseColorSet.normal) then
+                    cell.bg = ColorSets[colorIndex].normal
+                elseif compareColor(cell.bg, BaseColorSet.light) then
+                    cell.bg = ColorSets[colorIndex].light
+                elseif compareColor(cell.bg, BaseColorSet.lightest) then
+                        cell.bg = ColorSets[colorIndex].lightest
+                    end
+                end
+                style.prototypes[state].layer:setCell( j, i, cell)
+                end
+            end
+        end
+    end
+
     Theory:parse({
         type = "base";
         {   type = "window";
@@ -86,7 +210,8 @@ function love.load()
             {   type = "textField";
                 id = "scoreLabel";
                 text = "0000000";
-                bg = { 48/255, 0/255, 64/255 };
+                fg = ColorSets[colorIndex].lightest;
+                bg = ColorSets[colorIndex].darkest;
                 dim = Theory:dim(19,2,9,2);
                 verticalAlign = "center";
                 horizontalAlign = "center";
@@ -105,6 +230,46 @@ function love.load()
             }
         }
     })
+
+    local window = Theory.idDict.win
+    for i = 1, window.layer.height do
+        for j = 1, window.layer.width do
+            local cell = window.layer:getCell(j,i)
+            if cell then
+                if compareColor(cell.fg, BaseColorSet.darkest) or
+                    compareColor(cell.fg, {0,0,0}) then
+                    cell.fg = ColorSets[colorIndex].darkest
+                elseif compareColor(cell.fg, BaseColorSet.dark) then
+                    cell.fg = ColorSets[colorIndex].dark
+                elseif compareColor(cell.fg, BaseColorSet.normal) then
+                    cell.fg = ColorSets[colorIndex].normal
+                elseif compareColor(cell.fg, BaseColorSet.light) then
+                    cell.fg = ColorSets[colorIndex].light
+                elseif compareColor(cell.fg, BaseColorSet.lightest) or
+                        compareColor(cell.fg, {1,1,1}) then
+                    cell.fg = ColorSets[colorIndex].lightest
+                end
+                if compareColor(cell.bg, BaseColorSet.darkest) or
+                    compareColor(cell.bg, {0,0,0}) then
+                    cell.bg = ColorSets[colorIndex].darkest
+                elseif compareColor(cell.bg, BaseColorSet.dark) then
+                    cell.bg = ColorSets[colorIndex].dark
+                elseif compareColor(cell.bg, BaseColorSet.normal) then
+                    cell.bg = ColorSets[colorIndex].normal
+                elseif compareColor(cell.bg, BaseColorSet.light) then
+                    cell.bg = ColorSets[colorIndex].light
+                elseif compareColor(cell.bg, BaseColorSet.lightest) or
+                        compareColor(cell.bg, {1,1,1}) then
+                    cell.bg = ColorSets[colorIndex].lightest
+                end
+            end
+            window.layer:setCell( j, i, cell)
+        end
+    end
+
+    
+
+    love.graphics.setBackgroundColor(ColorSets[colorIndex].darkest)
     gameState = {
         --view constant
         SCALE = 16;
