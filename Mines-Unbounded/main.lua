@@ -1,4 +1,20 @@
 -- luacheck: std +love
+
+--evil workaround
+-- luacheck: ignore ColorSets colorIndex
+ColorSets = {};
+colorIndex = 1;
+local loveSetColor = love.graphics.setColor
+function love.graphics.setColor(rgba, ...) -- luacheck: ignore
+    if type(rgba) == "table" then
+        loveSetColor(rgba)
+    elseif type(rgba) == "string" then
+        loveSetColor(ColorSets[colorIndex][rgba])
+    else
+        loveSetColor(rgba, ...)
+    end
+end
+
 local Theory = require("AsciiTheory")
 
 local commands = {}
@@ -58,8 +74,8 @@ colors[6] = colors.magenta
 colors[7] = colors.pink
 colors[8] = colors.purple
 
-local colorIndex = 6;
-local ColorSets = {
+colorIndex = 7;
+ColorSets = {
     { -- Anxiety
         darkest = {  34/255,  19/255,  48/255 };
         dark    = {  41/255,  52/255,  82/255 };
@@ -138,7 +154,10 @@ local BaseColorSet = {
     lightest= { 102/255, 102/255, 255/255 };
 }
 
-function compareColor( color1, color2)
+local compareColor = function( color1, color2)
+    if type(color1) ~= "table" or type(color2) ~= "table" then
+        return false
+    end
     return math.floor(color1[1]*255) == math.floor(color2[1]*255)
        and math.floor(color1[2]*255) == math.floor(color2[2]*255)
        and math.floor(color1[3]*255) == math.floor(color2[3]*255)
@@ -167,36 +186,20 @@ function love.load()
     local style = Theory.styles.new
     for state in pairs(style.prototypes) do
         if style.prototypes[state].layer then
-        for i = 1, style.prototypes[state].layer.height do
-            for j = 1, style.prototypes[state].layer.width do
-                local cell = style.prototypes[state].layer:getCell(j,i)
-            if cell then
-                if compareColor(cell.fg, BaseColorSet.darkest) or
-                    compareColor(cell.fg, {0,0,0}) then
-                    cell.fg = ColorSets[colorIndex].darkest
-                elseif compareColor(cell.fg, BaseColorSet.dark) then
-                    cell.fg = ColorSets[colorIndex].dark
-                elseif compareColor(cell.fg, BaseColorSet.normal) then
-                    cell.fg = ColorSets[colorIndex].normal
-                elseif compareColor(cell.fg, BaseColorSet.light) then
-                    cell.fg = ColorSets[colorIndex].light
-                elseif compareColor(cell.fg, BaseColorSet.lightest) then
-                    cell.fg = ColorSets[colorIndex].lightest
-                end
-                if compareColor(cell.bg, BaseColorSet.darkest) or
-                    compareColor(cell.bg, {0,0,0}) then
-                    cell.bg = ColorSets[colorIndex].darkest
-                elseif compareColor(cell.bg, BaseColorSet.dark) then
-                    cell.bg = ColorSets[colorIndex].dark
-                elseif compareColor(cell.bg, BaseColorSet.normal) then
-                    cell.bg = ColorSets[colorIndex].normal
-                elseif compareColor(cell.bg, BaseColorSet.light) then
-                    cell.bg = ColorSets[colorIndex].light
-                elseif compareColor(cell.bg, BaseColorSet.lightest) then
-                        cell.bg = ColorSets[colorIndex].lightest
+            for i = 1, style.prototypes[state].layer.height do
+                for j = 1, style.prototypes[state].layer.width do
+                    local cell = style.prototypes[state].layer:getCell(j,i)
+                    if cell then
+                        for hue in pairs(BaseColorSet) do
+                            if compareColor(cell.fg, BaseColorSet[hue]) then
+                                cell.fg = hue
+                            end
+                            if compareColor(cell.bg, BaseColorSet[hue]) then
+                                cell.bg = hue
+                            end
+                        end
+                        style.prototypes[state].layer:setCell( j, i, cell)
                     end
-                end
-                style.prototypes[state].layer:setCell( j, i, cell)
                 end
             end
         end
@@ -210,8 +213,8 @@ function love.load()
             {   type = "textField";
                 id = "scoreLabel";
                 text = "0000000";
-                fg = ColorSets[colorIndex].lightest;
-                bg = ColorSets[colorIndex].darkest;
+                fg = "lightest";
+                bg = "darkest";
                 dim = Theory:dim(19,2,9,2);
                 verticalAlign = "center";
                 horizontalAlign = "center";
@@ -236,38 +239,18 @@ function love.load()
         for j = 1, window.layer.width do
             local cell = window.layer:getCell(j,i)
             if cell then
-                if compareColor(cell.fg, BaseColorSet.darkest) or
-                    compareColor(cell.fg, {0,0,0}) then
-                    cell.fg = ColorSets[colorIndex].darkest
-                elseif compareColor(cell.fg, BaseColorSet.dark) then
-                    cell.fg = ColorSets[colorIndex].dark
-                elseif compareColor(cell.fg, BaseColorSet.normal) then
-                    cell.fg = ColorSets[colorIndex].normal
-                elseif compareColor(cell.fg, BaseColorSet.light) then
-                    cell.fg = ColorSets[colorIndex].light
-                elseif compareColor(cell.fg, BaseColorSet.lightest) or
-                        compareColor(cell.fg, {1,1,1}) then
-                    cell.fg = ColorSets[colorIndex].lightest
-                end
-                if compareColor(cell.bg, BaseColorSet.darkest) or
-                    compareColor(cell.bg, {0,0,0}) then
-                    cell.bg = ColorSets[colorIndex].darkest
-                elseif compareColor(cell.bg, BaseColorSet.dark) then
-                    cell.bg = ColorSets[colorIndex].dark
-                elseif compareColor(cell.bg, BaseColorSet.normal) then
-                    cell.bg = ColorSets[colorIndex].normal
-                elseif compareColor(cell.bg, BaseColorSet.light) then
-                    cell.bg = ColorSets[colorIndex].light
-                elseif compareColor(cell.bg, BaseColorSet.lightest) or
-                        compareColor(cell.bg, {1,1,1}) then
-                    cell.bg = ColorSets[colorIndex].lightest
+                for hue in pairs(BaseColorSet) do
+                    if compareColor(cell.fg, BaseColorSet[hue]) then
+                        cell.fg = hue
+                    end
+                    if compareColor(cell.bg, BaseColorSet[hue]) then
+                        cell.bg = hue
+                    end
                 end
             end
             window.layer:setCell( j, i, cell)
         end
     end
-
-    
 
     love.graphics.setBackgroundColor(ColorSets[colorIndex].darkest)
     gameState = {
@@ -315,7 +298,6 @@ end
 
 function mine.endGame()
     gameState.isGameOver = true
-    
 end
 
 function love.update(dt)
@@ -346,7 +328,7 @@ function love.mousepressed(x, y, button)
 
     local viewX, viewY = math.floor( x / gameState.SCALE ), math.floor( y / gameState.SCALE )
     local boardX, boardY = mine.viewToBoard(viewX, viewY)
-    
+
     if boardX == math.huge or boardY == math.huge then
         return
     end
@@ -385,6 +367,9 @@ function love.keypressed(key)
         gameState.motionX = gameState.motionX - 1
     elseif key == "d" or key == "right" then
         gameState.motionX = gameState.motionX + 1
+    elseif key == "return" then
+        colorIndex = 2
+        Theory:forceRepaintAll()
     elseif key == "rctrl" then
         debug.debug()
     end

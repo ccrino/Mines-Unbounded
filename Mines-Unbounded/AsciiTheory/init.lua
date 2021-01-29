@@ -229,6 +229,14 @@ function AsciiTheory:repaint( tag )
 	self.objects[tag]:paint()
 end
 
+function AsciiTheory:forceRepaintAll()
+	for _,obj in ipairs(self.objects) do
+		if obj.tag and obj.type ~= "base" then
+			self:repaint(obj.tag)
+		end
+	end
+end
+
 function AsciiTheory:mousepressed( x, y, _button, _istouch )
 	for tag, object in pairs(self.objects) do
 		if object.collider and object.collider:contains(x,y) then
