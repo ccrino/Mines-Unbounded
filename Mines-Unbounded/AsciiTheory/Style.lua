@@ -16,12 +16,39 @@ function Style:newButtonStyle( filename )
     else
         return nil
     end
-    if  not styleMap:isFiller( 1, 1) then
+    if not styleMap:isFiller( 1, 1) then
         error("bad style map halting")
     end
     local prototypes = {}
     local temp = Dim:new( 2, 2, 1, 1 )
     local states = { "normal", "hovered", "pressed" }
+    if styleMap:isFiller( 2, 2) then
+        local base = Dim:new()
+        local layer = Layer:new()
+        temp.x = 3; temp.y = 3;
+        while not styleMap:isFiller( temp.x + temp.w, temp.y + temp.h - 1 ) do
+            temp.w = temp.w + 1
+        end
+        while not styleMap:isFiller( temp.x + temp.w - 1, temp.y + temp.h ) do
+            temp.h = temp.h + 1
+        end
+        layer:copyRegion(styleMap, temp, Dim:new(layer.width + 1, layer.height + 1))
+        base.x = 1
+        base.y = 1
+        base.w = temp.w
+        base.h = temp.h
+        prototypes.normal = { layer=layer, base=base }
+
+        layer = Layer:new()
+        temp.x = temp.x + temp.w + 3
+        layer:copyRegion(styleMap, temp, Dim:new(layer.width + 1, layer.height + 1))
+        prototypes.hovered = { layer=layer, base=base }
+
+        layer = Layer:new()
+        temp.x = temp.x + temp.w + 3
+        layer:copyRegion(styleMap, temp, Dim:new(layer.width + 1, layer.height + 1))
+        prototypes.pressed = { layer=layer, base=base }
+    else
     for _, state in pairs(states) do
         local base = Dim:new()
         local layer = Layer:new()
@@ -52,6 +79,7 @@ function Style:newButtonStyle( filename )
             temp.w = 1
         end
         prototypes[state] = { layer=layer, base=base }
+    end
     end
     local style = {
         type = "button";

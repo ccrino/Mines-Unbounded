@@ -20,11 +20,15 @@ local AsciiTheory = {
 	idDict = {};
 	styles = {};
 	commands = {};
-	loveCanvas = love.graphics.newCanvas();
+	loveCanvas = love.graphics.newCanvas(1504,792);
 	symbols = require "AsciiTheory/SymbolDictionary";
 	mask = {},
 	__needsRepaint = false;
 	__objectsToRepaint = {};
+
+	--unbounded hack
+	offsetX = 0;
+	offsetY = 0;
 }
 AsciiTheory.__index = AsciiTheory
 
@@ -159,7 +163,8 @@ function AsciiTheory:Init()
 end
 
 function AsciiTheory:update( dt )
-	self.mouse:moveTo(love.mouse.getPosition())
+	local x,y = love.mouse.getPosition()
+	self.mouse:moveTo(x - (self.offsetX * 16), y - (self.offsetY * 16))
 	for tag, object in pairs(self.objects) do
 		if object.__delay then
 			if object.__delay <= 0 then
@@ -219,7 +224,7 @@ function AsciiTheory:draw()
 		self.__objectsToRepaint = {}
 	end
 	love.graphics.setColor(1,1,1,1)
-	love.graphics.draw(self.loveCanvas)
+	love.graphics.draw(self.loveCanvas,self.offsetX*16,self.offsetY*16)
 end
 
 function AsciiTheory:repaint( tag )
@@ -235,14 +240,17 @@ function AsciiTheory:forceRepaintAll()
 			self:repaint(obj.tag)
 		end
 	end
+	self.mask = {}
 end
 
-function AsciiTheory:mousepressed( x, y, _button, _istouch )
+function AsciiTheory:mousepressed( sx, sy, _button, _istouch )
+	local x = sx - (self.offsetX * 16)
+	local y = sy - (self.offsetY * 16)
 	for tag, object in pairs(self.objects) do
 		if object.collider and object.collider:contains(x,y) then
 			if object.command ~= nil then
 				if self.commands[object.command] then
-					self.commands[object.command]()
+					self.commands[object.command](object.param)
 				end
 				object.__delay = .25
 				object.state = "pressed"
