@@ -59,7 +59,9 @@ local colors = {
 	tiledark = {   0,  70/255, 140/255};
 	tilelite = {   0,  89/255, 178/255};
 	halodark = { 163/255, 0, 217/255};
-	halolite = { 191/255, 0, 255/255};
+    halolite = { 191/255, 0, 255/255};
+    bghalodark = {  81/255, 0, 107/255};
+    bghalolite = {  96/255, 0, 128/255};
 }
 
 colors[1] = colors.white
@@ -586,7 +588,7 @@ function love.load()
         mouseY = 0;
         motionX = 0;
         motionY = 0;
-        time = 0;
+        moveTime = 0;
     }
 end
 
@@ -670,20 +672,31 @@ function mine.endGame()
 end
 
 function love.update(dt)
-    gameState.mouseX, gameState.mouseY = love.mouse.getPosition()
+    if not gameState.keyboardNavigation then
+        gameState.mouseX, gameState.mouseY = love.mouse.getPosition()
+    end
     Theory:update(dt)
-    gameState.time = gameState.time + dt
-    if gameState.time > 0.1 then
-        gameState.time = gameState.time - 0.1
+    
+    if gameState.motionX ~= 0 or gameState.motionY ~= 0 then
+        gameState.moveTime = gameState.moveTime + dt
 
-        if not gameState.menu then
-            gameState.boardOffsetX = gameState.boardOffsetX + gameState.motionX
-            gameState.boardOffsetY = gameState.boardOffsetY + gameState.motionY
-            if not math.abs(gameState.motionX) == math.abs(gameState.motionY) then
-                gameState.checkShift = not gameState.checkShift
+        local updateStep = gameState.keyboardNavigation and 0.1 or 0.1
+
+        if gameState.moveTime > updateStep then
+            gameState.moveTime = gameState.moveTime - updateStep
+
+            if not gameState.menu then
+                gameState.boardOffsetX = gameState.boardOffsetX + gameState.motionX
+                gameState.boardOffsetY = gameState.boardOffsetY + gameState.motionY
+                if not math.abs(gameState.motionX) == math.abs(gameState.motionY) then
+                    gameState.checkShift = not gameState.checkShift
+                end
             end
         end
+    else
+        gameState.moveTime = 0.1
     end
+    
 
     if not gameState.menu and gameState.menuAnimation ~= 0 then
         local progress = gameState.menuAnimation
@@ -750,7 +763,8 @@ end
 function love.mousepressed(x, y, button)
     Theory:mousepressed(x, y, button)
 
-    if not gameState.menu and not gameState.isGameOver then
+    if not gameState.menu and
+       not gameState.isGameOver then
         local viewX, viewY = math.floor( x / gameState.SCALE ), math.floor( y / gameState.SCALE )
         local boardX, boardY = mine.viewToBoard(viewX, viewY)
 
@@ -793,6 +807,22 @@ function love.keypressed(key)
         gameState.motionX = gameState.motionX - 1
     elseif key == "d" or key == "right" then
         gameState.motionX = gameState.motionX + 1
+    elseif key == "k" then
+        if gameState.keyboardNavigation then
+            love.mousepressed(gameState.mouseX, gameState.mouseY, 2)
+        else
+            gameState.keyboardNavigation = true
+            gameState.mouseX = (gameState.VIEW_OFFSET_X + gameState.VIEW_WIDTH / 2) * gameState.SCALE
+            gameState.mouseY = (gameState.VIEW_OFFSET_Y + gameState.VIEW_HEIGHT / 2) * gameState.SCALE
+        end
+    elseif key == "j" then
+        if gameState.keyboardNavigation then
+            love.mousepressed(gameState.mouseX, gameState.mouseY, 1)
+        end
+    elseif key == "m" then
+        if gameState.keyboardNavigation then
+            gameState.keyboardNavigation = false
+        end
     elseif key == "rctrl" then
         debug.debug()
     end
@@ -927,9 +957,10 @@ function mine.printBoard()
                 local cellX, cellY = mine.viewToBoard( x, y )
                 local cell = mine.rawGetCell(  cellX, cellY )
                 local check = (y+x+(gameState.checkShift and 1 or 0)) % 2 ~= 0
+                local inHalo = mine.isNeighbor( cellX, cellY, boardX, boardY)
                 local color = ( gameState.doCheckers and check )
-                    and ( mine.isNeighbor( cellX, cellY, boardX, boardY) and colors.halodark or colors.tiledark )
-                    or  ( mine.isNeighbor( cellX, cellY, boardX, boardY) and colors.halolite or colors.tilelite )
+                    and ( inHalo and colors.halodark or colors.tiledark )
+                    or  ( inHalo and colors.halolite or colors.tilelite )
                 if not cell or cell.state == STATE.UNSEEN then
                     mine.printToBoard( "█", color, x, y )
                 elseif cell.anim > 0 then
@@ -942,9 +973,14 @@ function mine.printBoard()
                         cell.value,
                         colors[colorSettings[VALUE[cell.value]]],
                         x, y,
-                        (gameState.doCheckers and check)
-                            and colors.bglite
-                            or  colors.bgdark
+                        inHalo and 
+                            ((gameState.doCheckers and check)
+                                and colors.bghalolite
+                                or  colors.bghalodark)
+                        or
+                            ((gameState.doCheckers and check)
+                                and colors.bglite
+                                or  colors.bgdark)
                     )
                 end
             end
