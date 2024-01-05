@@ -2,29 +2,25 @@ local HC = require("HC")
 local Layer = require("AsciiTheory/Layer")
 local Cell = require("AsciiTheory/Cell")
 
+---@class TextField
+---@field public type "textField"
+---@field public theory AsciiTheory
+---@field public dim Dim
+---@field public id? string
+---@field public parent? table
+---@field public tag? integer
+---@field public children table[]
+---@field public verticalAlign? "min" | "center" | "max"
+---@field public horizontalAlign? "min" | "center" | "max"
+---@field public overflow? string
+---@field public fillBackground? string
+---@field public width number?
+---@field public height number?
+---@field protected collider table
+---@field private text string
 local TextField = {
     -- non instance
-    theory = nil,
     type = "textField",
-
-    -- instance
-    dim = nil,
-    collider = nil,
-    id = nil,
-    text = nil,
-
-    -- window ref
-    parent = nil,
-    tag = nil,
-    children = {},
-
-    -- optional parameters
-    verticalAlign = nil,
-    horizontalAlign = nil,
-    overflow = nil,
-    fillBackground = nil,
-    width = nil,
-    height = nil,
 
     -- temporary parameters !do not rely on
     fg = {1,1,1},
@@ -32,30 +28,46 @@ local TextField = {
     repaint = false,
     layer = nil,
 }
-TextField.__index = TextField
 
+local classMt = {}
+setmetatable(TextField, classMt)
 
+local instanceMt = {
+    __index = TextField
+}
+
+---creates a new text field
+---@param dim Dim
+---@param text string
+---@param id? string
+---@return TextField
 function TextField:new( dim, text, id )
     local o = {}
     o.collider = HC.rectangle( dim:unpack(16) )
     o.dim = dim
     o.text = text
     o.id = id
-    setmetatable(o, self)
+    setmetatable(o, instanceMt)
     return o
 end
+classMt.__call = TextField.new
 
-function TextField:fromObject( o )
+---creates a new text field from an object base
+---@param o table
+---@return TextField
+function TextField:fromObject(o)
     o.text = o.text or ""
     if not o.dim then
         --todo handle unset dim
         error"TextField initialized without dimension"
     end
-    o.collider = HC.rectangle( o.dim:unpack(16) )
-    setmetatable( o, self)
+    o.collider = HC.rectangle(o.dim:unpack(16))
+    setmetatable(o, instanceMt)
     return o
 end
 
+---moves the text field
+---@param ... number[]
 function TextField:move(...)
     self.dim:move(...)
     self.collider:move(...)
@@ -64,6 +76,7 @@ function TextField:move(...)
     end
 end
 
+---render the text field to a layer
 function TextField:paint()
     if self.repaint or not self.layer then
         local text = self.text
@@ -147,7 +160,9 @@ function TextField:paint()
     self.theory.layers[self.tag] = self.layer
 end
 
-function TextField:setText( newText )
+---sets the text field to a new string
+---@param newText any
+function TextField:setText(newText)
     self.text = newText
     self.repaint = true
     self.theory:repaint(self.tag)

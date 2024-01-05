@@ -3,5 +3,8 @@
 		{
 			"path": "."
 		}
-	]
+	],
+	"settings": {
+		"pixelbyte.love2d.srcDir": "src"
+	}
 }

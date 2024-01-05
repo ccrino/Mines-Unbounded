@@ -1,17 +1,28 @@
 
+---@class Dim
+---@field public type "dim"
+---@field public theory AsciiTheory
+---@field public x number
+---@field public y number
+---@field public w number
+---@field public h number
 local Dim = {
-    x = nil,
-    y = nil,
-    w = nil,
-    h = nil
+	type = 'dim',
 }
-Dim.__index = Dim
+
+local classMt = {}
+setmetatable(Dim, classMt)
+
+local instanceMt = {
+	__index = Dim
+}
 
 function Dim:new( x, y, w, h)
 	local o = { x=x, y=y, w=w, h=h }
-	setmetatable(o, self)
+	setmetatable(o, instanceMt)
 	return o
 end
+classMt.__call = Dim.new
 
 function Dim:unpack( mul )
 	if mul then
