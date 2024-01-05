@@ -1,10 +1,13 @@
-local EXP = require("rexpaint")
-local Layer = require("AsciiTheory/Layer")
-local Cell = require("AsciiTheory/Cell")
-local Dim = require("AsciiTheory/Dim")
+local Reader = require "AsciiTheory/Reader"
+local Layer = require "AsciiTheory/Layer"
+local Cell = require "AsciiTheory/Cell"
+local Dim = require "AsciiTheory/Dim"
 
+---@class Style
+----@field public type "style"
+---@field public theory AsciiTheory
+---@field public styleType ""
 local Style = {
-    type = ""; -- one of button, ...
     prototypes = {};
 }
 Style.__index = Style
@@ -12,7 +15,8 @@ Style.__index = Style
 function Style:newButtonStyle( filename )
     local styleMap
     if filename then
-        styleMap = Style.read( filename )
+        local layers = Reader:read(filename)
+        styleMap = layers[1] or {}
     else
         return nil
     end
@@ -49,37 +53,37 @@ function Style:newButtonStyle( filename )
         layer:copyRegion(styleMap, temp, Dim:new(layer.width + 1, layer.height + 1))
         prototypes.pressed = { layer=layer, base=base }
     else
-    for _, state in pairs(states) do
-        local base = Dim:new()
-        local layer = Layer:new()
-        local y_offset = {}
-        for _x = 1, 3 do
-            while not styleMap:isFiller( temp.x + temp.w, temp.y + temp.h - 1 ) do
-                temp.w = temp.w + 1
-            end
-            local w = layer.width + 1
-            for _y = 1, 3 do
-                y_offset[_y] = y_offset[_y] or layer.height + 1
-                while not styleMap:isFiller( temp.x + temp.w - 1, temp.y + temp.h ) do
-                    temp.h = temp.h + 1
+        for _, state in pairs(states) do
+            local base = Dim:new()
+            local layer = Layer:new()
+            local y_offset = {}
+            for _x = 1, 3 do
+                while not styleMap:isFiller( temp.x + temp.w, temp.y + temp.h - 1 ) do
+                    temp.w = temp.w + 1
                 end
-                layer:copyRegion(styleMap, temp, Dim:new(w, y_offset[_y]))
-                if _x == 1 and _y == 1 then
-                    base.x = layer.width + 1
-                    base.y = layer.height + 1
-                elseif _x == 2 and _y == 2 then
-                    base.w = temp.w
-                    base.h = temp.h
+                local w = layer.width + 1
+                for _y = 1, 3 do
+                    y_offset[_y] = y_offset[_y] or layer.height + 1
+                    while not styleMap:isFiller( temp.x + temp.w - 1, temp.y + temp.h ) do
+                        temp.h = temp.h + 1
+                    end
+                    layer:copyRegion(styleMap, temp, Dim:new(w, y_offset[_y]))
+                    if _x == 1 and _y == 1 then
+                        base.x = layer.width + 1
+                        base.y = layer.height + 1
+                    elseif _x == 2 and _y == 2 then
+                        base.w = temp.w
+                        base.h = temp.h
+                    end
+                    temp.y = temp.y + temp.h + 1
+                    temp.h = 1
                 end
-                temp.y = temp.y + temp.h + 1
-                temp.h = 1
+                temp.y = 2
+                temp.x = temp.x + temp.w + 1
+                temp.w = 1
             end
-            temp.y = 2
-            temp.x = temp.x + temp.w + 1
-            temp.w = 1
+            prototypes[state] = { layer=layer, base=base }
         end
-        prototypes[state] = { layer=layer, base=base }
-    end
     end
     local style = {
         type = "button";
@@ -111,23 +115,6 @@ function Layer:isFiller( x, y)
     return nil
 end
 
--- reads in a rx file with a single layer and extracts the layer in the internal format
-function Style.read( filename )
-	local rex_canvas
-	if filename then
-		rex_canvas = EXP:read( filename )
-	else
-		return {}
-	end
-    local layer = Layer:new()
-    local rex_layer = rex_canvas.layers[1]
-    layer.width = rex_layer.width
-    layer.height = rex_layer.height
-    for _, cell in ipairs(rex_layer.cells) do
-        layer:setCell( cell.x+1, cell.y+1, Cell:new( cell.char, cell.fg, cell.bg) )
-	end
-	return layer
-end
 
 function Style:scale( width, height )
     local states = {}

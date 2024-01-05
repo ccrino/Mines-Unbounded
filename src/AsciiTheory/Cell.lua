@@ -1,0 +1,84 @@
+---@alias color {[1]: number, [2]: number, [3]: number}
+
+---@class Cell
+---@field public type "cell"
+---@field public theory AsciiTheory
+---@field public char integer
+---@field private fg color | string
+---@field private bg color | string
+local Cell = {
+    type = 'cell';
+    __colorMap = {};
+}
+Cell.__index = Cell
+
+local classMt = {}
+setmetatable(Cell, classMt)
+
+local instanceMt = {
+    __index = Cell
+}
+
+---create a new cell
+---@param char integer
+---@param fg color | string
+---@param bg color | string
+---@return Cell
+function Cell:new( char, fg, bg )
+    local cell = {}
+    cell.char = char
+    cell.fg = fg
+    cell.bg = bg
+    setmetatable(cell, instanceMt)
+    return cell
+end
+classMt.__call = Cell.new
+
+---duplicates a cell
+---@param cell? Cell
+---@return Cell
+function Cell:copy( cell )
+    if cell then
+        return Cell:new( cell.char, cell.fg, cell.bg)
+    end
+    return Cell:new( self.char, self.fg, self.bg )
+end
+
+---returns the foreground color for the cell
+---@return color
+function Cell:getFg()
+    return Cell:__mapColor(self.fg)
+end
+
+---returns the background color for the cell
+---@return color
+function Cell:getBg()
+    return Cell:__mapColor(self.bg)
+end
+
+---adds a color mapping
+---@param name string
+---@param rgba color
+function Cell:setMapColor(name, rgba)
+    self.__colorMap[name] = rgba
+end
+
+---removes a color mapping
+---@param name string
+function Cell:clearMapColor(name)
+    self.__colorMap[name] = nil
+end
+
+---converts mapped colors to literal colors
+---@param rgbas string | color
+---@return color
+---@private
+function Cell:__mapColor(rgbas)
+    if type(rgbas) == "string" then
+        return self.__colorMap[rgbas] or {0, 0, 0}
+    else
+        return rgbas
+    end
+end
+
+return Cell

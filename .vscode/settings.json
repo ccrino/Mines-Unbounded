@@ -1,0 +1,20 @@
+{
+    "Lua.diagnostics.disable": [
+        "duplicate-index"
+    ],
+    "Lua.diagnostics.globals": [
+        "love"
+    ],
+    "Lua.runtime.version": "LuaJIT",
+    "Lua.diagnostics.disableScheme": [
+        "HC/*"
+    ],
+    "Lua.diagnostics.ignoredFiles": "Disable",
+    "Lua.workspace.library": [
+        "C:/Users/Calvin/AppData/Roaming/Code/User/globalStorage/sumneko.lua/addonManager/addons/love2d/module/library"
+    ],
+    "Lua.runtime.special": {
+        "love.filesystem.load": "loadfile"
+    },
+    "Lua.workspace.checkThirdParty": false,
+}
