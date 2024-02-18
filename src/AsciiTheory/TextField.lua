@@ -1,8 +1,12 @@
-local HC = require("HC")
-local Layer = require("AsciiTheory/Layer")
-local Cell = require("AsciiTheory/Cell")
+local HC = require "HC"
+local Utils = require "AsciiTheory/Utils"
+local Dim = require "AsciiTheory/Dim"
+local Layer = require "AsciiTheory/Layer"
+local Cell = require "AsciiTheory/Cell"
+local ViewObject = require "AsciiTheory/ViewObject"
+local SymbolDictionary = require "AsciiTheory/SymbolDictionary"
 
----@class TextField
+---@class TextField : ViewObject
 ---@field public type "textField"
 ---@field public theory AsciiTheory
 ---@field public dim Dim
@@ -14,22 +18,22 @@ local Cell = require("AsciiTheory/Cell")
 ---@field public horizontalAlign? "min" | "center" | "max"
 ---@field public overflow? string
 ---@field public fillBackground? string
----@field public width number?
----@field public height number?
+---@field public width? number
+---@field public height? number
 ---@field protected collider table
 ---@field private text string
+---@field private fg color
+---@field private bg color
+---@field private layer Layer
+---@field private repaint boolean
 local TextField = {
     -- non instance
     type = "textField",
-
-    -- temporary parameters !do not rely on
-    fg = {1,1,1},
-    bg = {0,0,0},
-    repaint = false,
-    layer = nil,
 }
 
-local classMt = {}
+local classMt = {
+    __index = ViewObject
+}
 setmetatable(TextField, classMt)
 
 local instanceMt = {
@@ -41,123 +45,86 @@ local instanceMt = {
 ---@param text string
 ---@param id? string
 ---@return TextField
-function TextField:new( dim, text, id )
-    local o = {}
-    o.collider = HC.rectangle( dim:unpack(16) )
+function TextField:new(dim, text, id)
+    local o = ViewObject()
+    o.collider = HC.rectangle(dim:unpack(16))
     o.dim = dim
     o.text = text
     o.id = id
+    o.fg = { 1, 1, 1 }
+    o.bg = { 0, 0, 0 }
     setmetatable(o, instanceMt)
     return o
 end
+
 classMt.__call = TextField.new
 
 ---creates a new text field from an object base
 ---@param o table
 ---@return TextField
 function TextField:fromObject(o)
+    ViewObject:fromObject(o)
+
+    assert(o.dim, "TextField initialized without dimension")
+
     o.text = o.text or ""
-    if not o.dim then
-        --todo handle unset dim
-        error"TextField initialized without dimension"
-    end
+    o.fg = o.fg or { 1, 1, 1 }
+    o.bg = o.bg or { 0, 0, 0 }
     o.collider = HC.rectangle(o.dim:unpack(16))
     setmetatable(o, instanceMt)
     return o
 end
 
----moves the text field
----@param ... number[]
-function TextField:move(...)
-    self.dim:move(...)
-    self.collider:move(...)
-    for _, child in pairs(self.children) do
-        child:move(...)
-    end
+---move the textfield instance
+---@param dx integer
+---@param dy integer
+function TextField:__onMove(dx, dy)
+    self.collider:move(dx, dy)
+    self.dim:move(dx, dy)
 end
 
----render the text field to a layer
-function TextField:paint()
+---gets the layer for the textfield
+---@return Layer, Dim
+function TextField:__onPaintLayer()
     if self.repaint or not self.layer then
         local text = self.text
-        local pos_x, pos_y, width, height = self.dim:unpack()
+        local width = self.dim.w
+        local height = self.dim.h
 
-        -- split into the appropriate number of lines
-        local lines = {}
-        if text:len() > width then
-            local line = ""
-            for word in text:gmatch("%S+") do
+        local lines = Utils.SplitTextIntoLines(text, width)
 
-                if line:len() + word:len() + 1 > width then
-                    if line:len() > 0 then
-                        table.insert(lines, line)
-                        line = ""
-                    end
-                    while word:len() > width do
-                        table.insert(lines, word:sub(1,width))
-                        word = word:sub(width+1)
-                    end
-                    if word:len() == width then
-                        table.insert(lines, word)
-                    else
-                        line = line .. word
-                    end
-                else
-                    if line == "" then
-                        line = word
-                    else
-                        line = line .. " " .. word
-                    end
-                end
-            end
-            if line:len() > 0 then
-                table.insert(lines, line)
-            end
-        else
-            lines[1] = text
-        end
         local layer
         if self.fillBackground then
-            layer = Layer:newSolid( self.dim, self.bg )
+            layer = Layer:newSolid(Dim(0, 0, width, height), self.bg)
         else
-            layer = Layer:new( pos_x, pos_y )
+            layer = Layer:new()
         end
-        if #lines ~= 0 then
-            local row_offsets = {}
-            for i, line in ipairs(lines) do
-                if not self.horizontalAlign or self.horizontalAlign == "min" then
-                    row_offsets[i] = 0
-                elseif self.horizontalAlign == "max" then
-                    row_offsets[i] = width - line:len()
-                elseif self.horizontalAlign == "center" then
-                    row_offsets[i] = math.floor( (width - line:len()) / 2 )
-                end
-            end
 
-            local column_offset = 0
-            if #lines < height then
-                if self.verticalAlign and self.verticalAlign ~= "min" then
-                    if self.verticalAlign == "max" then
-                        column_offset = 1 + height - #lines
-                    elseif self.verticalAlign == "center" then
-                        column_offset = 1 + math.floor( (height - #lines) / 2 )
-                    end
-                end
-            end
-
+        if #lines > 0 then
+            local column_offset = Utils.GetOffsetForAlignment(self.verticalAlign, #lines, height)
             for i, line in ipairs(lines) do
                 local y = i + column_offset
+                if y > height then
+                    break
+                end
+
+                local row_offset = Utils.GetOffsetForAlignment(self.horizontalAlign, line:len(), width)
                 for j = 1, line:len() do
-                    local x = j + row_offsets[i]
-                    local char = line:sub(j,j)
-                    local code = self.theory.symbols[char]
-                    layer:setCell( x, y, Cell:new( code, self.fg, self.bg))
+                    local x = j + row_offset
+                    if x > width then
+                        break
+                    end
+
+                    local char = line:sub(j, j)
+                    local code = SymbolDictionary[char]
+                    layer:setCell(x, y, Cell:new(code, self.fg, self.bg))
                 end
             end
         end
         self.layer = layer
     end
-    self.theory.layers[self.tag] = self.layer
+
+    return self.layer, self.dim
 end
 
 ---sets the text field to a new string

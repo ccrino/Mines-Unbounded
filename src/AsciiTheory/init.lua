@@ -1,45 +1,44 @@
 --luacheck: std +love
---luacheck: ignore 21./_.*
+---luacheck: ignore 21./_.*
 
-local HC = require 'HC'
+local HC              = require 'HC'
 
-local Dim 		= require "AsciiTheory/Dim";
-local Cell 		= require "AsciiTheory/Cell";
-local Layer 	= require "AsciiTheory/Layer";
-local Reader    = require "AsciiTheory/Reader";
-local Style 	= require "AsciiTheory/Style";
-local Window 	= require "AsciiTheory/Window";
-local Pane 		= require "AsciiTheory/Pane";
-local Button 	= require "AsciiTheory/Button";
-local Canvas 	= require "AsciiTheory/Canvas";
-local TextField = require "AsciiTheory/TextField";
+local Dim             = require "AsciiTheory/Dim";
+local Cell            = require "AsciiTheory/Cell";
+local Layer           = require "AsciiTheory/Layer";
+local Reader          = require "AsciiTheory/Reader";
+local Style           = require "AsciiTheory/Style";
+local Window          = require "AsciiTheory/Window";
+local Pane            = require "AsciiTheory/Pane";
+local Button          = require "AsciiTheory/Button";
+local TextField       = require "AsciiTheory/TextField";
 
 ---@class AsciiTheory
-local AsciiTheory = {
-	layers = {};
-	layerCount = 1;
-	objects = {};
-	styles = {};
+---@field private drawables ({ position: Dim, layer: Layer } | nil)[]
+---@field private __text love.Text | nil
+local AsciiTheory     = {
+	drawables = {},
+	layerCount = 1,
+	objects = {},
 
-	symbols = require "AsciiTheory/SymbolDictionary";
-	mask = {};
+	symbols = require "AsciiTheory/SymbolDictionary",
+	mask = {},
 
-	__idMap = {};
-	__commandHandlerMap = {};
+	__idMap = {},
+	__commandHandlerMap = {},
 
-	__needsRepaint = false;
-	__objectsToRepaint = {};
+	__needsRepaint = false,
+	__objectsToRepaint = {},
 }
 
-AsciiTheory.Dim = Dim
-AsciiTheory.Cell = Cell
-AsciiTheory.Layer = Layer
-AsciiTheory.Reader  = Reader
-AsciiTheory.Style = Style
-AsciiTheory.Window = Window
-AsciiTheory.Pane = Pane
-AsciiTheory.Button = Button
-AsciiTheory.Canvas = Canvas
+AsciiTheory.Dim       = Dim
+AsciiTheory.Cell      = Cell
+AsciiTheory.Layer     = Layer
+AsciiTheory.Reader    = Reader
+AsciiTheory.Style     = Style
+AsciiTheory.Window    = Window
+AsciiTheory.Pane      = Pane
+AsciiTheory.Button    = Button
 AsciiTheory.TextField = TextField
 
 
@@ -51,7 +50,6 @@ Style.theory = AsciiTheory
 Window.theory = AsciiTheory
 Pane.theory = AsciiTheory
 Button.theory = AsciiTheory
-Canvas.theory = AsciiTheory
 TextField.theory = AsciiTheory
 
 
@@ -87,23 +85,27 @@ function AsciiTheory:parse(struct)
 	return struct.__o
 end
 
+---@type table<string, { fromObject: fun(self: table, o: table): table }>
 local __types = {
-	base = { fromObject = function () return AsciiTheory.objects[1] end };
-	window = Window;
-	pane = Pane;
-	button = Button;
-	textField = TextField;
-	__index = function (_,t) error("unrecognized object type " .. t .. " passed to generic from object") end;
+	base = { fromObject = function() return AsciiTheory.objects[1] end },
+	window = Window,
+	pane = Pane,
+	button = Button,
+	textField = TextField,
 }
-setmetatable(__types, __types)
+setmetatable(__types, {
+	__index = function(_, t)
+		error("unrecognized object type " .. t .. " passed to generic from object")
+	end
+})
 
-function AsciiTheory:genericFromObject( o )
+function AsciiTheory:genericFromObject(o)
 	if not o.type then
-		error"Typeless value passed to generic from object"
+		error "Typeless value passed to generic from object"
 	end
 	local typeConstructor = __types[o.type]
 	o = typeConstructor:fromObject(o)
-	if o.id then
+	if o.id and not self.__idMap[o.id] then
 		self.__idMap[o.id] = o;
 	end
 	return o
@@ -119,7 +121,7 @@ local function summaryDump(object, depth)
 	end
 end
 
-function AsciiTheory:attach( parent, object )
+function AsciiTheory:attach(parent, object)
 	if type(parent) == "number" then
 		parent = self.objects[parent]
 		if not parent then
@@ -212,46 +214,34 @@ end
 function AsciiTheory:clearTags(tagsToClear)
 	for tag in pairs(tagsToClear) do
 		self.objects[tag] = nil
-		self.layers[tag] = nil
+		self.drawables[tag] = nil
 	end
 
 	self:forceRepaintAll()
 end
 
--- define style for theory
-function AsciiTheory:buttonStyle( name, ... )
-	self.styles[name] = Style:newButtonStyle( ... )
-end
-
--- helper for defining many styles
-function AsciiTheory:LoadButtonStyles(styleMap)
-	for name, path in pairs(styleMap) do
-		self:buttonStyle(name, path)
-	end
-end
-
 -- Mapped Color Setup
----@param table table<string, number[]>: mapping from color string to color value
+---@param table table<string, number[]> mapping from color string to color value
 function AsciiTheory:registerMappedColors(table)
 	for name, color in pairs(table) do
 		self:registerMappedColor(name, color)
 	end
 end
 
----@param name string: color name to register
----@param rgba number[]: color table in the rgb[a] format
+---@param name string color name to register
+---@param rgba number[] color table in the rgb[a] format
 function AsciiTheory:registerMappedColor(name, rgba)
 	Reader:registerMapColor(name, rgba)
 	Cell:setMapColor(name, rgba)
 end
 
----@param name string: color name to unregister
+---@param name string color name to unregister
 function AsciiTheory:unregisterMappedColor(name)
 	Reader:unregisterMapColor(name)
 	Cell:clearMapColor(name)
 end
 
----@param table table<string, number[]>: update values for a mapping, color string to color value
+---@param table table<string, number[]> update values for a mapping, color string to color value
 function AsciiTheory:setMappedColors(table)
 	for name, color in pairs(table) do
 		self:setMappedColor(name, color)
@@ -259,26 +249,26 @@ function AsciiTheory:setMappedColors(table)
 	self:forceRepaintAll()
 end
 
----@param name string: color name to set color for
----@param rgba number[]: color value to be set
+---@param name string color name to set color for
+---@param rgba number[] color value to be set
 function AsciiTheory:setMappedColor(name, rgba)
 	Cell:setMapColor(name, rgba)
 end
 
----@param table table<string, function>: register multiple commands from the keys of the provided table
+---@param table table<string, function> register multiple commands from the keys of the provided table
 function AsciiTheory:registerCommandHandlers(table)
 	for command, handler in pairs(table) do
 		self:registerCommandHandler(command, handler)
 	end
 end
 
----@param command string: command string to register a handler for
----@param handler function: function to run on recieving a command event
+---@param command string command string to register a handler for
+---@param handler function function to run on recieving a command event
 function AsciiTheory:registerCommandHandler(command, handler)
 	self.__commandHandlerMap[command] = handler
 end
 
----@param command string: command string to unregister
+---@param command string command string to unregister
 function AsciiTheory:unregisterCommandHandler(command)
 	self.__commandHandlerMap[command] = nil
 end
@@ -291,28 +281,29 @@ end
 function AsciiTheory:Init(x, y)
 	self.loveCanvas = love.graphics.newCanvas(x * 16, y * 16)
 	self.globalSpace = HC.new(100) -- define new collider space
-	self.mouse = HC.point(0,0) --define mouse object
+	self.mouse = HC.point(0, 0) --define mouse object
 	local base = {
-		type = "base";
-		tag = 1;
-		children = {};
-		theory = self;
+		type = "base",
+		tag = 1,
+		children = {},
+		theory = self,
 	}
-	function base:addChild( child ) --luacheck: ignore
+	function base:addChild(child) --luacheck: ignore
 		table.insert(self.children, child)
 		child.parent = self
 		self.theory:repaint(child.tag)
 	end
+
 	self.objects[1] = base
 end
 
-function AsciiTheory:update( dt )
-	local x,y = love.mouse.getPosition()
+function AsciiTheory:update(dt)
+	local x, y = love.mouse.getPosition()
 	self.mouse:moveTo(x, y)
 	for tag, object in pairs(self.objects) do
 		if object.__delay then
 			if object.__delay <= 0 then
-				if object.collider and object.collider:collidesWith( self.mouse ) then
+				if object.collider and object.collider:collidesWith(self.mouse) then
 					-- mouse over actions
 					if object.state and object.state ~= "hovered" then
 						object.state = "hovered"
@@ -335,44 +326,67 @@ function AsciiTheory:__drawCanvas()
 	if self.__needsRepaint then
 		self.__needsRepaint = false;
 
-		local loveCanvas = self.loveCanvas
-		local layers = self.layers
-		local mask = self.mask
-		table.sort( self.__objectsToRepaint )
-		-- display canvas
-		local previousCanvas = love.graphics.getCanvas()
-		love.graphics.setCanvas(loveCanvas)
+		if not self.__text then
+			self.__text = love.graphics.newText(love.graphics.getFont())
+
+			-- WTF pre-rendering offscreen fixes weird issue not rendering certain glyphs
+			-- with no apparent rhyme or reason.
+			for char = 32, 128 do
+				self.__text:add(self.symbols[char], -16, -16)
+			end
+		else
+			self.__text:clear()
+		end
+
+		table.sort(self.__objectsToRepaint)
+
 		local lastTag = -1
 		for _, tag in ipairs(self.__objectsToRepaint) do
 			if tag ~= lastTag then
 				lastTag = tag
-				local layer = layers[tag]
-				if layer then
-					for layer_y, rowcells in pairs( layer.cells )do
-						for layer_x, cell in pairs( rowcells ) do
-							local x = layer_x + layer.dx - 1
-							local y = layer_y + layer.dy - 1
-							if cell and cell.char ~= 1 and not( mask[x] and mask[x][y] and mask[x][y] > tag ) then
-								love.graphics.setColor( cell:getBg() )
-								love.graphics.print(tostring( self.symbols[220] ), 16*x, 16*y )
-								love.graphics.setColor( cell:getFg() )
-								love.graphics.print(tostring( self.symbols[cell.char] ), 16*x, 16*y )
-								mask[x] = mask[x] or {}
-								mask[x][y] = tag
-							end
-						end
-					end
-				end
+
+				self:__drawTag(tag)
 			end
 		end
-		love.graphics.setCanvas(previousCanvas)
+
+		self.loveCanvas:renderTo(function()
+			love.graphics.draw(self.__text)
+		end)
+
 		self.__objectsToRepaint = {}
+	end
+end
+
+---comment
+---@param tag integer
+function AsciiTheory:__drawTag(tag)
+	local drawable = self.drawables[tag]
+
+	if not drawable then
+		return
+	end
+
+	local mask = self.mask
+	local layer = drawable.layer
+	local position = drawable.position or Dim(0, 0, 0, 0)
+
+	for layer_x, layer_y, cell in layer:cells() do
+		local x = layer_x + layer.dx + position.x - 1
+		local y = layer_y + layer.dy + position.y - 1
+
+		if cell and cell.char ~= 1 and not (mask[x] and mask[x][y] and mask[x][y] > tag) then
+			self.__text:add({ cell:getBg(), self.symbols[220] }, 16 * x, 16 * y)
+			self.__text:add({ cell:getFg(), self.symbols[cell.char] }, 16 * x, 16 * y)
+
+			mask[x] = mask[x] or {}
+			mask[x][y] = tag
+		end
 	end
 end
 
 function AsciiTheory:draw()
 	self:__drawCanvas()
-	love.graphics.setColor(1,1,1,1)
+	love.graphics.setColor(1, 1, 1, 1)
 	love.graphics.draw(self.loveCanvas)
 end
 
@@ -381,16 +395,25 @@ function AsciiTheory:getDrawable()
 	return self.loveCanvas
 end
 
-function AsciiTheory:repaint( tag )
+function AsciiTheory:repaint(tag)
 	if not tag or not self.objects[tag] then return end
 
 	self.__needsRepaint = true;
 	table.insert(self.__objectsToRepaint, tag)
-	self.objects[tag]:paint()
+	local layer, position = self.objects[tag]:paint()
+
+	if not layer then
+		return
+	end
+
+	self.drawables[tag] = {
+		layer = layer,
+		position = position,
+	}
 end
 
 function AsciiTheory:forceRepaintAll()
-	for _,obj in pairs(self.objects) do
+	for _, obj in pairs(self.objects) do
 		if obj and obj.tag and obj.type ~= "base" then
 			self:repaint(obj.tag)
 		end
@@ -400,7 +423,7 @@ end
 
 function AsciiTheory:mousepressed(x, y, _button, _istouch)
 	for tag, object in pairs(self.objects) do
-		if object.collider and object.collider:contains(x,y) then
+		if object.collider and object.collider:contains(x, y) then
 			if object.command ~= nil then
 				if self.__commandHandlerMap[object.command] then
 					self.__commandHandlerMap[object.command](object.param)

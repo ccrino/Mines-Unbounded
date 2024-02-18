@@ -1,3 +1,4 @@
+local Dim = require "AsciiTheory/Dim"
 
 ---@class Pane
 ---@field public type "pane"
@@ -6,11 +7,11 @@
 ---@field public tag? integer
 ---@field public children any[]
 local Pane = {
-    type = "pane",
+	type = "pane",
 
 	--note to future self, add this feature?
-    style = nil,
-    orientation = nil,
+	style = nil,
+	orientation = nil,
 }
 
 local classMt = {}
@@ -27,9 +28,10 @@ function Pane:new(layer)
 	local o = {}
 	o.layer = layer
 	o.children = {}
-    setmetatable(o, instanceMt)
+	setmetatable(o, instanceMt)
 	return o
 end
+
 classMt.__call = Pane.new
 
 ---create a new pane from an object
@@ -37,7 +39,7 @@ classMt.__call = Pane.new
 ---@return Pane
 function Pane:fromObject(o)
 	if o.type ~= "pane" then
-		error"Invalid base object to pane:fromObject"
+		error "Invalid base object to pane:fromObject"
 	end
 	o.children = {}
 	setmetatable(o, instanceMt)
@@ -46,10 +48,11 @@ end
 
 ---renders a layer for the object
 function Pane:paint()
-	self.theory.layers[self.tag] = self.layer
 	for _, child in pairs(self.children) do
 		self.theory:repaint(child.tag)
 	end
+
+	return self.layer, Dim(0, 0, 0, 0)
 end
 
 ---adds view elements as children of the pane

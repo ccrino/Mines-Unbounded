@@ -1,4 +1,3 @@
-
 ---@class Dim
 ---@field public type "dim"
 ---@field public theory AsciiTheory
@@ -17,21 +16,22 @@ local instanceMt = {
 	__index = Dim
 }
 
-function Dim:new( x, y, w, h)
-	local o = { x=x, y=y, w=w, h=h }
+function Dim:new(x, y, w, h)
+	local o = { x = x, y = y, w = w, h = h }
 	setmetatable(o, instanceMt)
 	return o
 end
+
 classMt.__call = Dim.new
 
-function Dim:unpack( mul )
+function Dim:unpack(mul)
 	if mul then
 		return self.x * mul, self.y * mul, self.w * mul, self.h * mul
 	end
 	return self.x, self.y, self.w, self.h
 end
 
-function Dim:move( dx, dy )
+function Dim:move(dx, dy)
 	self.x = self.x + dx
 	self.y = self.y + dy
 end

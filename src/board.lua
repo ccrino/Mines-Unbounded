@@ -11,11 +11,11 @@ local MINE_ESCALATION_RATE = 0.9999
 ---@field onCellGradualRevealHandler fun(x: integer, y: integer, depth: integer)?
 ---@field cells table<integer, table<integer, Cell>>
 local Board = {
-    mineWeight = MINE_ESCALATION_RATE;
-    cleared = 0;
-    begun = false;
-    isGameOver = false;
-    cells = {};
+    mineWeight = MINE_ESCALATION_RATE,
+    cleared = 0,
+    begun = false,
+    isGameOver = false,
+    cells = {},
 }
 
 ---reset board to state of a new game
@@ -33,7 +33,7 @@ end
 ---@param boardX integer x component of the center of starting area
 ---@param boardY integer y component of the center of starting area
 function Board:beginGame(boardX, boardY)
-    local newEmptyCell = function (lx, ly)
+    local newEmptyCell = function(lx, ly)
         if not self.cells[ly] then
             self.cells[ly] = {}
         end
@@ -48,7 +48,7 @@ end
 
 ---sets the board to end state
 function Board:endGame()
-    self.isGameOver = false
+    self.isGameOver = true
 end
 
 ---event called when score value changes
@@ -110,7 +110,7 @@ function Board:secondaryAction(x, y)
         cell.state = STATE.UNSEEN
     elseif cell.state == STATE.SEEN and VALUE[cell.value] > 0 then
         local flaggedNeighbors = 0
-        self:doNeighbor(x, y, function (...)
+        self:doNeighbor(x, y, function(...)
             if self:getCell(...).state == STATE.FLAGGED then
                 flaggedNeighbors = flaggedNeighbors + 1
             end
@@ -152,9 +152,9 @@ end
 ---@param y integer
 function Board:revealRegion(x, y)
     local queuePointer = 1
-    local queue = {{x, y, 0}}
+    local queue = { { x, y, 0 } }
     local function insertToQueue(lx, ly, depth)
-        table.insert(queue, {lx, ly, depth})
+        table.insert(queue, { lx, ly, depth })
     end
     while (queuePointer <= #queue) do
         local lx, ly, depth = unpack(queue[queuePointer])
@@ -167,7 +167,7 @@ function Board:revealRegion(x, y)
             self:calculateValue(lx, ly)
             self.cleared = self.cleared + 1
             if cell.value == VALUE.NONE then
-                self:doNeighbor( lx, ly, insertToQueue, depth + 1)
+                self:doNeighbor(lx, ly, insertToQueue, depth + 1)
             end
         end
         queuePointer = queuePointer + 1
@@ -243,12 +243,12 @@ end
 ---@param ... any[] additional parameters for callback
 function Board:doNeighbor(x, y, callback, ...)
     callback(x - 1, y - 1, ...)
-    callback(x - 1, y    , ...)
+    callback(x - 1, y, ...)
     callback(x - 1, y + 1, ...)
-    callback(x,     y - 1, ...)
-    callback(x,     y + 1, ...)
+    callback(x, y - 1, ...)
+    callback(x, y + 1, ...)
     callback(x + 1, y - 1, ...)
-    callback(x + 1, y    , ...)
+    callback(x + 1, y, ...)
     callback(x + 1, y + 1, ...)
 end
 
@@ -262,25 +262,37 @@ function Board:isNeighbor(x1, y1, x2, y2)
     return not (math.abs(x1 - x2) > 1 or math.abs(y1 - y2) > 1)
 end
 
-
 local savePack = {
     state = {
-        [0]=10, [10]=0;
-        [1]=20, [20]=1;
-        [2]=30, [30]=2;
-    };
+        [0] = 10,
+        [10] = 0,
+        [1] = 20,
+        [20] = 1,
+        [2] = 30,
+        [30] = 2,
+    },
     value = {
-		[" "]=0, [0]=" ";
-		["1"]=1, [1]="1";
-		["2"]=2, [2]="2";
-		["3"]=3, [3]="3";
-		["4"]=4, [4]="4";
-		["5"]=5, [5]="5";
-		["6"]=6, [6]="6";
-		["7"]=7, [7]="7";
-		["8"]=8, [8]="8";
-		["*"]=9, [9]="*";
-	};
+        [" "] = 0,
+        [0] = " ",
+        ["1"] = 1,
+        [1] = "1",
+        ["2"] = 2,
+        [2] = "2",
+        ["3"] = 3,
+        [3] = "3",
+        ["4"] = 4,
+        [4] = "4",
+        ["5"] = 5,
+        [5] = "5",
+        ["6"] = 6,
+        [6] = "6",
+        ["7"] = 7,
+        [7] = "7",
+        ["8"] = 8,
+        [8] = "8",
+        ["*"] = 9,
+        [9] = "*",
+    },
 }
 
 ---loads the board state
@@ -301,19 +313,19 @@ end
 ---loads the board state from a file.
 ---@param file love.File
 ---@return true flag indicating validity
----@return number weight 
+---@return number weight
 ---@return integer cleared
 ---@return table<integer, table<integer, Cell>> cells
 ---@overload fun(file: love.File): false
 function Board:loadFromFileInternal(file)
     if not file:open("r") then
-        love.window.showMessageBox( "Error Reading", "could not load the provided file", "error")
+        love.window.showMessageBox("Error Reading", "could not load the provided file", "error")
         return false
     end
     local header = file:read(love.data.getPackedSize("nn"))
-    local valid, weight, cleared = pcall( love.data.unpack, "nn", header)
+    local valid, weight, cleared = pcall(love.data.unpack, "nn", header)
     if not valid or type(weight) ~= "number" or type(cleared) ~= "number" then
-        love.window.showMessageBox( "Error Reading", "bad file header.", "error")
+        love.window.showMessageBox("Error Reading", "bad file header.", "error")
         return false
     end
     local cells = {}
@@ -323,24 +335,24 @@ function Board:loadFromFileInternal(file)
     local data, good, y, x, d
     repeat
         data = file:read(sizej)
-        good, y = pcall( love.data.unpack, "j", data )
+        good, y = pcall(love.data.unpack, "j", data)
         if good and y then
             cells[y] = {}
             repeat
                 data = file:read(sizejB)
-                good, x, d = pcall( love.data.unpack, "jB", data )
+                good, x, d = pcall(love.data.unpack, "jB", data)
                 if not good or not x or not d then
-                    love.window.showMessageBox( "Error Reading", "corruption detected loading aborted", "error")
+                    love.window.showMessageBox("Error Reading", "corruption detected loading aborted", "error")
                     return false
                 elseif d ~= 0 then
                     if d < 10 or d > 39 then
-                        love.window.showMessageBox( "Error Reading", "corruption detected loading aborted", "error")
+                        love.window.showMessageBox("Error Reading", "corruption detected loading aborted", "error")
                         return false
                     end
                     cells[y][x] = {
-                        state = savePack.state[d - (d % 10)];
-                        value = savePack.value[d % 10];
-                        anim = 0;
+                        state = savePack.state[d - (d % 10)],
+                        value = savePack.value[d % 10],
+                        anim = 0,
                     }
                     if cells[y][x].state == STATE.SEEN then
                         seen = seen + 1
@@ -350,31 +362,31 @@ function Board:loadFromFileInternal(file)
         end
     until not good or not y
     if seen ~= cleared then
-        love.window.showMessageBox( "Invalid Board State",
-        "board state contained discrepancies.",
-        "error")
+        love.window.showMessageBox("Invalid Board State",
+            "board state contained discrepancies.",
+            "error")
         return false
     end
     return true, weight, cleared, cells
 end
 
-function Board:saveToFile( filename )
+function Board:saveToFile(filename)
     local file = io.open(filename, "wb")
     if not file then return end
 
     ---@diagnostic disable-next-line: param-type-mismatch
-    file:write( love.data.pack("string", "nn", self.mineWeight, self.cleared))
+    file:write(love.data.pack("string", "nn", self.mineWeight, self.cleared))
     for y, row in pairs(self.cells) do
         ---@diagnostic disable-next-line: param-type-mismatch
-        file:write(love.data.pack("string","j",y))
+        file:write(love.data.pack("string", "j", y))
         for x, cell in pairs(row) do
             ---@diagnostic disable-next-line: param-type-mismatch
-            file:write(love.data.pack("string","j",x))
+            file:write(love.data.pack("string", "j", x))
             ---@diagnostic disable-next-line: param-type-mismatch
-            file:write(love.data.pack("string","B", savePack.state[cell.state] + savePack.value[cell.value]))
+            file:write(love.data.pack("string", "B", savePack.state[cell.state] + savePack.value[cell.value]))
         end
         ---@diagnostic disable-next-line: param-type-mismatch
-        file:write(love.data.pack("string","jB",0,0))
+        file:write(love.data.pack("string", "jB", 0, 0))
     end
     file:close()
 end

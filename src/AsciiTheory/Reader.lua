@@ -3,8 +3,8 @@ local Layer = require "AsciiTheory/Layer"
 local Cell = require "AsciiTheory/Cell"
 
 local Reader = {
-    theory = nil;
-    mappedColors = {};
+    theory = nil,
+    mappedColors = {},
 }
 
 ---reads the contents of a file into layers
@@ -29,7 +29,7 @@ function Reader:read(filename)
             local mappedBg = self:mapColor(rex_cell.bg)
             local cell = Cell:new(rex_cell.char, mappedFg, mappedBg)
 
-            layer:setCell( rex_cell.x + 1, rex_cell.y + 1, cell)
+            layer:setCell(rex_cell.x + 1, rex_cell.y + 1, cell)
         end
 
         table.insert(layers, layer)

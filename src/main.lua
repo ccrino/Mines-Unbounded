@@ -13,27 +13,27 @@ local commands = {}
 local gameState = {}
 local mine = {}
 
----@enum
+---@enum UI_STATE
 local UI_STATE = {
-    GAME = 1;
-    MENU = 2;
+    GAME = 1,
+    MENU = 2,
 }
 
 local font
 function love.load()
     font = love.graphics.newImageFont(
-		"Assets/cp437_16x16.png",
-		[[ ☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼]] ..
-		[[ !"#$%&'()*+,-./0123456789:;<=>?]] ..
-		[[@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_]] ..
-		[[`abcdefghijklmnopqrstuvwxyz{|}~⌂]] ..
-		[[ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒ]] ..
-		[[áíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐]] ..
-		[[└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀]] ..
-		[[αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ]]
-	)
-	love.graphics.setFont(font)
-    love.graphics.setDefaultFilter("nearest","nearest",0)
+        "Assets/cp437_16x16.png",
+        [[ ☺☻♥♦♣♠•◘○◙♂♀♪♫☼►◄↕‼¶§▬↨↑↓→←∟↔▲▼]] ..
+        [[ !"#$%&'()*+,-./0123456789:;<=>?]] ..
+        [[@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_]] ..
+        [[`abcdefghijklmnopqrstuvwxyz{|}~⌂]] ..
+        [[ÇüéâäàåçêëèïîìÄÅÉæÆôöòûùÿÖÜ¢£¥₧ƒ]] ..
+        [[áíóúñÑªº¿⌐¬½¼¡«»░▒▓│┤╡╢╖╕╣║╗╝╜╛┐]] ..
+        [[└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀]] ..
+        [[αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ]]
+    )
+    love.graphics.setFont(font)
+    love.graphics.setDefaultFilter("nearest", "nearest", 0)
     Theory:Init(94, 50)
     Theory:registerCommandHandlers(commands)
 
@@ -49,61 +49,89 @@ function love.load()
 
     gameState = {
         --view constant
-        SCALE = 16;
-        VIEW_OFFSET_X = 7;
-        VIEW_OFFSET_Y = 7;
-        VIEW_WIDTH = 32;
-        VIEW_HEIGHT = 32;
-        SCREEN_HEIGHT = 50;
-        SCREEN_WIDTH = 47;
+        SCALE = 16,
+        VIEW_OFFSET_X = 7,
+        VIEW_OFFSET_Y = 7,
+        VIEW_WIDTH = 32,
+        VIEW_HEIGHT = 32,
+        SCREEN_HEIGHT = 50,
+        SCREEN_WIDTH = 47,
         --view variables
-        boardPainted = false;
-        boardCanvas = love.graphics.newCanvas();
+        boardCanvas = love.graphics.newCanvas(),
         Demo = {
-            [3]={ [4]={state=1, value="3"}, [5]={state=1, value="4"}, [6]={state=1, value="5"},
-                  [7]={state=1, value="6"}, [8]={state=1, value="7"}, [9]={state=2, value="*"}};
-            [4]={ [4]={state=1, value="1"}, [5]={state=1, value="1"}, [6]={state=2, value="*"},
-                  [7]={state=2, value="*"}, [8]={state=2, value="*"}, [9]={state=2, value="*"}};
-            [5]={ [4]={state=1, value="1"}, [5]={state=1, value="1"}, [6]={state=1, value="4"},
-                  [7]={state=2, value="*"}, [8]={state=1, value="8"}, [9]={state=0, value="*"}};
-            [6]={ [4]={state=1, value="1"}, [5]={state=1, value=" "}, [6]={state=1, value="2"},
-                  [7]={state=2, value="*"}, [8]={state=0, value="*"}, [9]={state=1, value="*"}};
-            [7]={ [4]={state=1, value="1"}, [5]={state=1, value="1"}, [6]={state=1, value="1"},
-                  [7]={state=1, value="2"}, [8]={state=1, value="3"}, [9]={state=1, value="2"}};
-        };
+            [3] = {
+                [4] = { state = 1, value = "3" },
+                [5] = { state = 1, value = "4" },
+                [6] = { state = 1, value = "5" },
+                [7] = { state = 1, value = "6" },
+                [8] = { state = 1, value = "7" },
+                [9] = { state = 2, value = "*" }
+            },
+            [4] = {
+                [4] = { state = 1, value = "1" },
+                [5] = { state = 1, value = "1" },
+                [6] = { state = 2, value = "*" },
+                [7] = { state = 2, value = "*" },
+                [8] = { state = 2, value = "*" },
+                [9] = { state = 2, value = "*" }
+            },
+            [5] = {
+                [4] = { state = 1, value = "1" },
+                [5] = { state = 1, value = "1" },
+                [6] = { state = 1, value = "4" },
+                [7] = { state = 2, value = "*" },
+                [8] = { state = 1, value = "8" },
+                [9] = { state = 0, value = "*" }
+            },
+            [6] = {
+                [4] = { state = 1, value = "1" },
+                [5] = { state = 1, value = " " },
+                [6] = { state = 1, value = "2" },
+                [7] = { state = 2, value = "*" },
+                [8] = { state = 0, value = "*" },
+                [9] = { state = 1, value = "*" }
+            },
+            [7] = {
+                [4] = { state = 1, value = "1" },
+                [5] = { state = 1, value = "1" },
+                [6] = { state = 1, value = "1" },
+                [7] = { state = 1, value = "2" },
+                [8] = { state = 1, value = "3" },
+                [9] = { state = 1, value = "2" }
+            },
+        },
 
-        previousUIState = nil;
-        UIState = UI_STATE.GAME;
+        previousUIState = nil,
+        UIState = UI_STATE.GAME,
         UIStateCanvas = {
-            [UI_STATE.GAME] = love.graphics.newCanvas();
-            [UI_STATE.MENU] = love.graphics.newCanvas();
-        };
-        UIStateChangeCanvasesDrawn = false;
-        UIStateChangeProgress = 1;
-        slideDirection = nil;
-        UIStateSlideX = 0;
-        UIStateSlideY = 0;
+            [UI_STATE.GAME] = love.graphics.newCanvas(),
+            [UI_STATE.MENU] = love.graphics.newCanvas(),
+        },
+        UIStateChangeCanvasesDrawn = false,
+        UIStateChangeProgress = 1,
+        slideDirection = nil,
+        UIStateSlideX = 0,
+        UIStateSlideY = 0,
 
-        demoPainted = false;
-        demoCanvas = love.graphics.newCanvas();
+        demoCanvas = love.graphics.newCanvas(),
 
-        animatingList = {};
+        animatingList = {},
 
         --Interface variables
-        mouseX = 0;
-        mouseY = 0;
+        mouseX = 0,
+        mouseY = 0,
 
-        xAxisControl = AxisControl:new();
-        yAxisControl = AxisControl:new();
+        xAxisControl = AxisControl:new(),
+        yAxisControl = AxisControl:new(),
     }
 
 
-    Board:setScoreChangeHandler(function (score)
+    Board:setScoreChangeHandler(function(score)
         local scoreStr = Utils.zeroLeftPad(score, 7)
         Theory:getElementById("scoreLabel")
             :setText(scoreStr)
     end)
-    Board:setCellGradualRevealHandler(function (x, y, depth)
+    Board:setCellGradualRevealHandler(function(x, y, depth)
         local cell = Board:getCell(x, y)
         gameState.animatingList[cell] = depth * 0.1
     end)
@@ -124,26 +152,18 @@ end
 
 function commands.up(param)
     Config:rotateSymbolColor(param, 1)
-    gameState.boardPainted = false
-    gameState.demoPainted = false
 end
 
 function commands.down(param)
     Config:rotateSymbolColor(param, -1)
-    gameState.boardPainted = false
-    gameState.demoPainted = false
 end
 
 function commands.toggleCheck()
     Config:toggleShowChecks()
-    gameState.boardPainted = false
-    gameState.demoPainted = false
 end
 
 function commands.setToDefault()
     Config:setDefault()
-    gameState.boardPainted = false
-    gameState.demoPainted = false
 end
 
 local function updatePalette()
@@ -153,8 +173,6 @@ local function updatePalette()
     local paletteStr = Utils.zeroLeftPad(Config:getPaletteNumber(), 3)
     Theory:getElementById("paletteReadout")
         :setText(paletteStr)
-    gameState.boardPainted = false
-    gameState.demoPainted = false
 end
 
 function commands.leftPalette()
@@ -268,7 +286,6 @@ function mine.getTheoryElementForState(state)
 end
 
 function love.draw()
-
     if mine.isInChangeStateInProgress() then
         love.graphics.setCanvas(gameState.UIStateCanvas[gameState.UIState])
         love.graphics.clear()
@@ -283,12 +300,18 @@ function love.draw()
         mine.drawUIState(mine.getCurrentUIState())
     end
 
+    --[[
+    love.graphics.print(
+        "[" .. math.floor(gameState.mouseX / gameState.SCALE) ..
+        "," .. math.floor(gameState.mouseY / gameState.SCALE) .. "]")
+    --]]
+
     jprof.pop "frame"
 end
 
 function mine.getCurrentUIStateLocation()
     local direction = gameState.slideDirection
-    if direction == 1 then -- UP
+    if direction == 1 then     -- UP
         return gameState.UIStateSlideX, gameState.UIStateSlideY + (gameState.SCREEN_HEIGHT * gameState.SCALE)
     elseif direction == 2 then --RIGHT
         return gameState.UIStateSlideX - (gameState.SCREEN_WIDTH * gameState.SCALE), gameState.UIStateSlideY
@@ -347,20 +370,20 @@ end
 
 local KeyBindings = {
     { -- primary binding
-        UP = "w";
-        DOWN = "s";
-        LEFT = "a";
-        RIGHT = "d";
-        KEYBOARD_RIGHT_CLICK = "k";
-        KEYBOARD_LEFT_CLICK = "j";
-        MOUSE_MODE = "m";
-        MAP_MODE = "z";
+        UP = "w",
+        DOWN = "s",
+        LEFT = "a",
+        RIGHT = "d",
+        KEYBOARD_RIGHT_CLICK = "k",
+        KEYBOARD_LEFT_CLICK = "j",
+        MOUSE_MODE = "m",
+        MAP_MODE = "z",
     },
     { -- secondary binding
-        UP = "up";
-        DOWN = "down";
-        LEFT = "left";
-        RIGHT = "right";
+        UP = "up",
+        DOWN = "down",
+        LEFT = "left",
+        RIGHT = "right",
     },
 }
 
@@ -424,7 +447,7 @@ end
 function mine.printBoard()
     local previousCanvas = love.graphics.getCanvas()
 
-    love.graphics.setCanvas{gameState.boardCanvas, stencil = true}
+    love.graphics.setCanvas { gameState.boardCanvas, stencil = true }
     local text = love.graphics.newText(font)
 
     local mouseBoardX, mouseBoardY = mine.mouseToBoardCoords()
@@ -449,7 +472,7 @@ function mine.printBoard()
             gameState.VIEW_OFFSET_X * gameState.SCALE,
             gameState.VIEW_OFFSET_Y * gameState.SCALE,
             (gameState.VIEW_WIDTH + 1) * gameState.SCALE,
-            (gameState.VIEW_HEIGHT + 1)* gameState.SCALE)
+            (gameState.VIEW_HEIGHT + 1) * gameState.SCALE)
     end)
 
     love.graphics.setStencilTest("greater", 0)
@@ -574,10 +597,10 @@ function mine.printCell(text, cell, x, y, isChecker, inHalo)
     local paletteExt = Config:getPaletteExt()
     local tileColor = isChecker
         and (inHalo and paletteExt.halodark or paletteExt.tiledark)
-        or  (inHalo and paletteExt.halolite or paletteExt.tilelite)
+        or (inHalo and paletteExt.halolite or paletteExt.tilelite)
     local backColor = isChecker
         and (inHalo and paletteExt.bghalolite or paletteExt.bglite)
-        or  (inHalo and paletteExt.bghalodark or paletteExt.bgdark)
+        or (inHalo and paletteExt.bghalodark or paletteExt.bgdark)
 
     if not cell or cell.state == STATE.UNSEEN or gameState.animatingList[cell] then
         mine.printToText(text, "█", tileColor, x, y)
@@ -588,7 +611,7 @@ function mine.printCell(text, cell, x, y, isChecker, inHalo)
     end
 end
 
-function mine.printToText( text, symbol, foreColor, x, y, backColor)
+function mine.printToText(text, symbol, foreColor, x, y, backColor)
     if not symbol or not foreColor then
         print("sym: " .. (symbol and symbol or "F") .. "\tfore: " .. (foreColor and "T" or "F"))
         debug.debug()
@@ -600,7 +623,7 @@ function mine.printToText( text, symbol, foreColor, x, y, backColor)
     x = math.floor(gameState.SCALE * (x + xPositionNudge))
     y = math.floor(gameState.SCALE * (y + yPositionNudge))
 
-	if backColor then
+    if backColor then
         text:add({ backColor, "█" }, x, y)
     end
     if symbol then
@@ -624,15 +647,14 @@ function mine.mouseToBoardCoords(
     viewOffsetX, viewOffsetY,
     viewWidth, viewHeight,
     boardOffsetX, boardOffsetY)
-
     local screenX = math.floor(gameState.mouseX / gameState.SCALE)
     local screenY = math.floor(gameState.mouseY / gameState.SCALE)
 
     if not mine.isViewCoordWithinBoard(
-        screenX, screenY,
-        viewOffsetX, viewOffsetY,
-        viewWidth, viewHeight)
-        then
+            screenX, screenY,
+            viewOffsetX, viewOffsetY,
+            viewWidth, viewHeight)
+    then
         return math.huge, math.huge
     end
 
@@ -651,15 +673,14 @@ end
 ---@param viewHeight? integer
 ---@return boolean
 function mine.isViewCoordWithinBoard(viewX, viewY,
-    viewOffsetX, viewOffsetY,
-    viewWidth, viewHeight)
-
+                                     viewOffsetX, viewOffsetY,
+                                     viewWidth, viewHeight)
     viewOffsetX = viewOffsetX or gameState.VIEW_OFFSET_X
     viewOffsetY = viewOffsetY or gameState.VIEW_OFFSET_Y
     viewWidth = viewWidth or gameState.VIEW_WIDTH
     viewHeight = viewHeight or gameState.VIEW_HEIGHT
 
-    return  viewX >= viewOffsetX
+    return viewX >= viewOffsetX
         and viewX <= viewOffsetX + viewWidth
         and viewY >= viewOffsetY
         and viewY <= viewOffsetY + viewHeight
@@ -674,10 +695,9 @@ end
 ---@param boardOffsetY? integer
 ---@return integer
 ---@return integer
-function mine.viewToBoard( viewX, viewY,
-        viewOffsetX, viewOffsetY,
-        boardOffsetX, boardOffsetY)
-
+function mine.viewToBoard(viewX, viewY,
+                          viewOffsetX, viewOffsetY,
+                          boardOffsetX, boardOffsetY)
     viewOffsetX = viewOffsetX or gameState.VIEW_OFFSET_X
     viewOffsetY = viewOffsetY or gameState.VIEW_OFFSET_Y
     boardOffsetX = boardOffsetX or gameState.xAxisControl:getPosition()
@@ -688,38 +708,41 @@ function mine.viewToBoard( viewX, viewY,
         viewY - viewOffsetY + boardOffsetY
 end
 
-function love.filedropped( file )
+function love.filedropped(file)
     Board:loadFromFile(file)
 end
 
 function love.quit()
     if not Board.isGameOver and Board.begun then
-		local result = love.window.showMessageBox(
+        local result = love.window.showMessageBox(
             "Quit",
             "Are you sure you want to quit?",
             {
-                "Quit", "Save and Quit", "Cancel",
-			    escapebutton = 3, enterbutton = 2,
-			},
+                "Quit",
+                "Save and Quit",
+                "Cancel",
+                escapebutton = 3,
+                enterbutton = 2,
+            },
             "warning")
 
-		if result == 3 then -- cancel
-			return true
-		elseif result == 2 then -- save and quit
-			local filename = "unbounded.save"
-			local i = 0
-			local file = io.open( filename )
-			while file do
-				file:close()
-				i = i + 1
-				filename = "unbounded" .. i .. ".save"
-				file = io.open( filename )
-			end
+        if result == 3 then     -- cancel
+            return true
+        elseif result == 2 then -- save and quit
+            local filename = "unbounded.save"
+            local i = 0
+            local file = io.open(filename)
+            while file do
+                file:close()
+                i = i + 1
+                filename = "unbounded" .. i .. ".save"
+                file = io.open(filename)
+            end
             Board:saveToFile(filename)
-			love.window.showMessageBox("Saved", 'game saved as "' .. filename .. '"' )
+            love.window.showMessageBox("Saved", 'game saved as "' .. filename .. '"')
         end
     end
     Config:save()
     jprof.write("prof.mpack")
-	return false
+    return false
 end
