@@ -11,7 +11,7 @@
     ],
     "Lua.diagnostics.ignoredFiles": "Disable",
     "Lua.workspace.library": [
-        "C:/Users/Calvin/AppData/Roaming/Code/User/globalStorage/sumneko.lua/addonManager/addons/love2d/module/library"
+        "C:/Users/CalvinCrino/AppData/Roaming/Code/User/globalStorage/sumneko.lua/addonManager/addons/love2d/module/library"
     ],
     "Lua.runtime.special": {
         "love.filesystem.load": "loadfile"
