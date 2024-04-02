@@ -3,6 +3,8 @@ local Theory = require "AsciiTheory"
 local Style = require "AsciiTheory/Style"
 local Window = require "AsciiTheory/Window"
 local Button = require "AsciiTheory/Button"
+local TextField = require "AsciiTheory/TextField"
+local Pane = require "AsciiTheory/Pane"
 
 return function()
     --- BEGIN LOAD XP RESOURCES ---

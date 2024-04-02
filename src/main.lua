@@ -41,7 +41,8 @@ function love.load()
 
     Config:load()
     local paletteStr = Utils.zeroLeftPad(Config:getPaletteNumber(), 3)
-    Theory:getElementById("paletteReadout"):setText(paletteStr)
+    Theory:getElementById("paletteReadout") --[[@as TextField]]
+        :setText(paletteStr)
 
     local palette = Config:getPaletteBase()
     Theory:setMappedColors(palette)
@@ -128,7 +129,7 @@ function love.load()
 
     Board:setScoreChangeHandler(function(score)
         local scoreStr = Utils.zeroLeftPad(score, 7)
-        Theory:getElementById("scoreLabel")
+        Theory:getElementById("scoreLabel") --[[@as TextField]]
             :setText(scoreStr)
     end)
     Board:setCellGradualRevealHandler(function(x, y, depth)
@@ -171,7 +172,7 @@ local function updatePalette()
     Theory:setMappedColors(palette)
     love.graphics.setBackgroundColor(palette.darkest)
     local paletteStr = Utils.zeroLeftPad(Config:getPaletteNumber(), 3)
-    Theory:getElementById("paletteReadout")
+    Theory:getElementById("paletteReadout") --[[@as TextField]]
         :setText(paletteStr)
 end
 
@@ -277,11 +278,16 @@ function mine.handleUIStateChange(dt)
     gameState.UIStateChangeProgress = progress
 end
 
+---returns a view element for a specified UI State
+---@param state UI_STATE
+---@return Window
 function mine.getTheoryElementForState(state)
     if state == UI_STATE.GAME then
-        return Theory:getElementById("gameWindow")
+        return Theory:getElementById("gameWindow") --[[@as Window]]
     elseif state == UI_STATE.MENU then
-        return Theory:getElementById("menuWindow")
+        return Theory:getElementById("menuWindow") --[[@as Window]]
+    else
+        error "Unknown UI state provided to get view element"
     end
 end
 
