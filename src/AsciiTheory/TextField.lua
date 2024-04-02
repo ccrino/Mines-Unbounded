@@ -8,7 +8,6 @@ local SymbolDictionary = require "AsciiTheory/SymbolDictionary"
 
 ---@class TextField : ViewObject
 ---@field public type "textField"
----@field public theory AsciiTheory
 ---@field public dim Dim
 ---@field public id? string
 ---@field public parent? table
@@ -132,7 +131,9 @@ end
 function TextField:setText(newText)
     self.text = newText
     self.repaint = true
-    self.theory:repaint(self.tag)
+    self:__repaintSelf()
 end
+
+ViewObject:registerViewObjectClass(TextField)
 
 return TextField

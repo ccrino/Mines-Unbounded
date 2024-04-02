@@ -1,13 +1,12 @@
+---@module "AsciiTheory/StyleExtract"
+
 local HC = require "HC"
 local ViewObject = require 'AsciiTheory/ViewObject'
-
 local Style = require 'AsciiTheory/Style'
----@module "AsciiTheory/Style"
----@module "AsciiTheory/StyleExtract"
+
 
 ---@class Button : ViewObject
 ---@field public type "button"
----@field public theory AsciiTheory
 ---@field public dim Dim
 ---@field public style string
 ---@field private __styleDef StyleInstance
@@ -76,7 +75,6 @@ function Button:fromObject(o)
 	end
 	o.state = "normal"
 	o.__delay = 0
-	o.children = {}
 	setmetatable(o, instanceMt)
 	return o
 end
@@ -89,7 +87,7 @@ function Button:scale(newDim)
 	self.collider = HC.rectangle(newDim:unpack(16))
 
 	self.__styleDef:scale(newDim.w, newDim.h)
-	self.theory:repaint(self.tag)
+	self:__repaintSelf()
 end
 
 ---move the button instance
@@ -111,5 +109,7 @@ Style:defineStyleParser(Button, function(SE)
 	SE:box("hovered")
 	SE:box("pressed")
 end)
+
+ViewObject:registerViewObjectClass(Button)
 
 return Button

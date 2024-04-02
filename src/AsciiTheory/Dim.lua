@@ -1,6 +1,5 @@
 ---@class Dim
 ---@field public type "dim"
----@field public theory AsciiTheory
 ---@field public x number
 ---@field public y number
 ---@field public w number

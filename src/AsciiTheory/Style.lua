@@ -1,14 +1,14 @@
+---@module "AsciiTheory/Layer"
+---@module "AsciiTheory/Cell"
+
 local Reader = require "AsciiTheory/Reader"
 local StyleExtract = require "AsciiTheory/StyleExtract"
-local Layer = require "AsciiTheory/Layer"
-local Cell = require "AsciiTheory/Cell"
 local Dim = require "AsciiTheory/Dim"
 
 ---@alias StyleParserFunction fun(styleExtractor: StyleExtract)
 
 
 ---@class Style
----@field public theory AsciiTheory
 ---@field public styleType string
 ---@field private __isDefinition boolean
 ---@field private __definitionTypeMap table<string, table<string, Style>>

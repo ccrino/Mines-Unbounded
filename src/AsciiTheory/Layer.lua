@@ -1,8 +1,7 @@
-local Cell = require("AsciiTheory/Cell")
+local Cell = require "AsciiTheory/Cell"
 
 ---@class Layer
 ---@field public type "layer"
----@field public theory AsciiTheory
 ---@field public dx number
 ---@field public dy number
 ---@field public width number

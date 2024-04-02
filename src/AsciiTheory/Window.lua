@@ -1,12 +1,11 @@
 ---@module "AsciiTheory/Layer"
+---@module "AsciiTheory/Dim"
 
-local Dim = require "AsciiTheory/Dim"
 local Style = require 'AsciiTheory/Style'
 local ViewObject = require 'AsciiTheory/ViewObject'
 
 ---@class Window : ViewObject
 ---@field public type "window"
----@field public theory AsciiTheory
 ---@field public tag? integer
 ---@field public children any[]
 ---@field public style string
@@ -74,5 +73,7 @@ end
 Style:defineStyleParser(Window, function(SE)
 	SE:TakeAll("main")
 end)
+
+ViewObject:registerViewObjectClass(Window)
 
 return Window

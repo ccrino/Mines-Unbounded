@@ -1,27 +1,26 @@
 --luacheck: std +love
 ---luacheck: ignore 21./_.*
 
-local HC              = require 'HC'
-
-local Dim             = require "AsciiTheory/Dim";
-local Cell            = require "AsciiTheory/Cell";
-local Layer           = require "AsciiTheory/Layer";
-local Reader          = require "AsciiTheory/Reader";
-local Style           = require "AsciiTheory/Style";
-local Window          = require "AsciiTheory/Window";
-local Pane            = require "AsciiTheory/Pane";
-local Button          = require "AsciiTheory/Button";
-local TextField       = require "AsciiTheory/TextField";
+local HC               = require "HC"
+local Dim              = require "AsciiTheory/Dim"
+local Cell             = require "AsciiTheory/Cell"
+local Layer            = require "AsciiTheory/Layer"
+local Reader           = require "AsciiTheory/Reader"
+local Style            = require "AsciiTheory/Style"
+local ViewObject       = require "AsciiTheory/ViewObject"
+local SymbolDictionary = require "AsciiTheory/SymbolDictionary"
 
 ---@class AsciiTheory
 ---@field private drawables ({ position: Dim, layer: Layer } | nil)[]
 ---@field private __text love.Text | nil
-local AsciiTheory     = {
+---@field private __idMap table<string, ViewObject>
+---@field private __commandHandlerMap table<string, fun(param: any)>
+---@field private __needsRepaint boolean
+---@field private __objectsToRepaint integer[]
+local AsciiTheory      = {
 	drawables = {},
 	layerCount = 1,
 	objects = {},
-
-	symbols = require "AsciiTheory/SymbolDictionary",
 	mask = {},
 
 	__idMap = {},
@@ -31,41 +30,55 @@ local AsciiTheory     = {
 	__objectsToRepaint = {},
 }
 
-AsciiTheory.Dim       = Dim
-AsciiTheory.Cell      = Cell
-AsciiTheory.Layer     = Layer
-AsciiTheory.Reader    = Reader
-AsciiTheory.Style     = Style
-AsciiTheory.Window    = Window
-AsciiTheory.Pane      = Pane
-AsciiTheory.Button    = Button
-AsciiTheory.TextField = TextField
+AsciiTheory.Dim        = Dim
+AsciiTheory.Cell       = Cell
+AsciiTheory.Layer      = Layer
+AsciiTheory.Style      = Style
+ViewObject.theory      = AsciiTheory
+
+---Given an table, returns the subtable consisting of
+--- all of the tables non-numeric keys
+---@param object table
+---@return {[string]: any}
+local function ObjectWithoutNumericKeys(object)
+	local result = {}
+
+	for key, value in pairs(object) do
+		if type(key) ~= "number" then
+			result[key] = value
+		end
+	end
+
+	return result
+end
 
 
-Dim.theory = AsciiTheory
-Cell.theory = AsciiTheory
-Layer.theory = AsciiTheory
-Reader.theory = AsciiTheory
-Style.theory = AsciiTheory
-Window.theory = AsciiTheory
-Pane.theory = AsciiTheory
-Button.theory = AsciiTheory
-TextField.theory = AsciiTheory
-
-
+---constructs a view object hierarchy from a definition struct.
+--- the struct should use string keys to define view object properties
+--- and numeric keys to define child objects. e.g.
+--- ```
+--- { type = "window",
+---   style = "base_page",
+---   { type = "button",
+---     style = "accept_button",
+---     command = "accept",
+---   },
+--- }
+--- ```
+--- type is a required field, as it determines what to construct at each level
+---@param struct table
+---@return ViewObject
 function AsciiTheory:parse(struct)
 	local buildStackPointer = 1
+	---@type table[]
 	local buildStack = { struct }
+	---@type table[]
 	local attachList = {}
 
 	while buildStackPointer <= #buildStack do
 		local current = buildStack[buildStackPointer]
-		local o = {}
-		for i, x in pairs(current) do
-			if type(i) ~= "number" then
-				o[i] = x
-			end
-		end
+
+		local o = ObjectWithoutNumericKeys(current)
 		current.__o = self:genericFromObject(o)
 		if #current > 0 then
 			table.insert(attachList, current)
@@ -85,25 +98,21 @@ function AsciiTheory:parse(struct)
 	return struct.__o
 end
 
----@type table<string, { fromObject: fun(self: table, o: table): table }>
-local __types = {
-	base = { fromObject = function() return AsciiTheory.objects[1] end },
-	window = Window,
-	pane = Pane,
-	button = Button,
-	textField = TextField,
-}
-setmetatable(__types, {
-	__index = function(_, t)
-		error("unrecognized object type " .. t .. " passed to generic from object")
-	end
+--register a base object constructor that just returns the object root
+ViewObject:registerViewObjectClass({
+	type = "base",
+	fromObject = function() return AsciiTheory.objects[1] end
 })
 
+---given an table describing an view object, constructs and returns said object
+---@param o table
+---@return ViewObject
 function AsciiTheory:genericFromObject(o)
-	if not o.type then
-		error "Typeless value passed to generic from object"
-	end
-	local typeConstructor = __types[o.type]
+	assert(type(o.type) == "string", "Typeless value passed to generic from object")
+
+	local typeConstructor = ViewObject.__types[o.type]
+	assert(typeConstructor, "Unrecognized object type " .. o.type .. " passed to generic from object")
+
 	o = typeConstructor:fromObject(o)
 	if o.id and not self.__idMap[o.id] then
 		self.__idMap[o.id] = o;
@@ -111,9 +120,12 @@ function AsciiTheory:genericFromObject(o)
 	return o
 end
 
+---dumps an objects hierarchy into the console
+---@param object table
+---@param depth integer?
 local function summaryDump(object, depth)
 	depth = depth or 0
-	print(("\t"):rep(depth) .. (object and (object.id or object.type) or tostring(object)))
+	print(("\t"):rep(depth) .. (object and object:tostring()))
 	if object and object.children then
 		for _, child in ipairs(object.children) do
 			summaryDump(child, depth + 1)
@@ -121,55 +133,68 @@ local function summaryDump(object, depth)
 	end
 end
 
+---tags an object into the theory
+---@param object ViewObject
+function AsciiTheory:__tagObject(object)
+	self.layerCount = self.layerCount + 1
+	object.tag = self.layerCount
+	self.objects[object.tag] = object
+end
+
+---attaches an object to a parent object
+---@param parent ViewObject | integer
+---@param object ViewObject
 function AsciiTheory:attach(parent, object)
 	if type(parent) == "number" then
+		---@type ViewObject
 		parent = self.objects[parent]
-		if not parent then
-			error "Invalid parent tag, this tag is not defined"
-		end
+		assert(parent, "Invalid parent tag, this tag is not defined")
 	end
+
+	---@cast parent ViewObject
+
+	-- assign tags if parent is also tagged
 	if parent.tag then
-		if self.objects[parent.tag] == parent then
-			self.layerCount = self.layerCount + 1
-			object.tag = self.layerCount
-			self.objects[object.tag] = object
-			parent:addChild(object)
-		else
-			error("attempted to attach a " .. (object.type or "Invalid Object") .. " to Invalid object")
-		end
-	else
-		--tag less build, tags generated when attached to base
-		parent:addChild(object)
+		assert(self.objects[parent.tag] == parent,
+			"attempted to attach a " .. (object.type or "Invalid Object") .. " to Invalid object")
+
+		self:__tagObject(object)
 	end
+
+	parent:addChild(object)
+
+	-- cascade assign tags for children
 	if object.tag and #object.children > 0 then
 		local current = object
 		repeat
-			if not current.tag then
-				error "non-tree like node structure detected aborting"
-			end
-			if current.children then
-				for _, x in ipairs(current.children) do
-					if not x.tag then
-						current = x
-						break
-					end
+			assert(current.tag, "non-tree like node structure detected aborting")
+
+			for _, x in ipairs(current.children) do
+				if not x.tag then
+					current = x
+					break
 				end
 			end
+
 			if current.tag then
+				assert(current.parent, "non-tree like node structure detected aborting")
 				current = current.parent
 			else
-				self.layerCount = self.layerCount + 1
-				current.tag = self.layerCount
-				self.objects[current.tag] = current
+				self:__tagObject(current)
 			end
+
+			---@cast current ViewObject
 		until current.tag == parent.tag
 		self:repaint(object.tag)
 	end
 end
 
+---dettaches an object from its parent object
+---@param object ViewObject
 function AsciiTheory:detach(object)
 	local parent = object.parent
 	if parent then
+		---@type integer
 		local childIndex
 		for i, child in ipairs(parent.children) do
 			if child == object then
@@ -177,9 +202,7 @@ function AsciiTheory:detach(object)
 			end
 		end
 
-		if not childIndex then
-			error "detach called for a corrupted object"
-		end
+		assert(childIndex, "detach called for a corrupted object")
 
 		-- break attachment refs
 		object.parent = nil
@@ -190,14 +213,13 @@ function AsciiTheory:detach(object)
 			local reclaimedTags = {}
 			local current = object
 			repeat
-				if current.children then
-					for _, x in ipairs(current.children) do
-						if x.tag then
-							current = x
-							break
-						end
+				for _, x in ipairs(current.children) do
+					if x.tag then
+						current = x
+						break
 					end
 				end
+
 				if not current.tag then
 					current = current.parent
 				else
@@ -211,6 +233,8 @@ function AsciiTheory:detach(object)
 	end
 end
 
+---removes all data for tags specified in dictionary
+---@param tagsToClear {[integer]: boolean}
 function AsciiTheory:clearTags(tagsToClear)
 	for tag in pairs(tagsToClear) do
 		self.objects[tag] = nil
@@ -273,30 +297,30 @@ function AsciiTheory:unregisterCommandHandler(command)
 	self.__commandHandlerMap[command] = nil
 end
 
+---looks up objects by id
+---@param id string
+---@return ViewObject | nil
 function AsciiTheory:getElementById(id)
 	return self.__idMap[id]
 end
 
---initialize theory
+---initialize theory
+---@param x integer - width of render target
+---@param y integer - height of render target
 function AsciiTheory:Init(x, y)
 	self.loveCanvas = love.graphics.newCanvas(x * 16, y * 16)
 	self.globalSpace = HC.new(100) -- define new collider space
 	self.mouse = HC.point(0, 0) --define mouse object
-	local base = {
+
+	-- define root object
+	self.objects[1] = ViewObject:fromObject({
 		type = "base",
 		tag = 1,
-		children = {},
-		theory = self,
-	}
-	function base:addChild(child) --luacheck: ignore
-		table.insert(self.children, child)
-		child.parent = self
-		self.theory:repaint(child.tag)
-	end
-
-	self.objects[1] = base
+	})
 end
 
+---love update handler
+---@param dt number time since last update
 function AsciiTheory:update(dt)
 	local x, y = love.mouse.getPosition()
 	self.mouse:moveTo(x, y)
@@ -322,6 +346,8 @@ function AsciiTheory:update(dt)
 	end
 end
 
+---internal drawing logic for populating cached canvas
+---@private
 function AsciiTheory:__drawCanvas()
 	if self.__needsRepaint then
 		self.__needsRepaint = false;
@@ -332,7 +358,7 @@ function AsciiTheory:__drawCanvas()
 			-- WTF pre-rendering offscreen fixes weird issue not rendering certain glyphs
 			-- with no apparent rhyme or reason.
 			for char = 32, 128 do
-				self.__text:add(self.symbols[char], -16, -16)
+				self.__text:add(SymbolDictionary[char], -16, -16)
 			end
 		else
 			self.__text:clear()
@@ -357,8 +383,9 @@ function AsciiTheory:__drawCanvas()
 	end
 end
 
----comment
+---draw a single tagged object
 ---@param tag integer
+---@private
 function AsciiTheory:__drawTag(tag)
 	local drawable = self.drawables[tag]
 
@@ -375,8 +402,8 @@ function AsciiTheory:__drawTag(tag)
 		local y = layer_y + layer.dy + position.y - 1
 
 		if cell and cell.char ~= 1 and not (mask[x] and mask[x][y] and mask[x][y] > tag) then
-			self.__text:add({ cell:getBg(), self.symbols[220] }, 16 * x, 16 * y)
-			self.__text:add({ cell:getFg(), self.symbols[cell.char] }, 16 * x, 16 * y)
+			self.__text:add({ cell:getBg(), SymbolDictionary[220] }, 16 * x, 16 * y)
+			self.__text:add({ cell:getFg(), SymbolDictionary[cell.char] }, 16 * x, 16 * y)
 
 			mask[x] = mask[x] or {}
 			mask[x][y] = tag
@@ -384,17 +411,22 @@ function AsciiTheory:__drawTag(tag)
 	end
 end
 
+---love draw handler, call directly within love.draw
 function AsciiTheory:draw()
 	self:__drawCanvas()
 	love.graphics.setColor(1, 1, 1, 1)
 	love.graphics.draw(self.loveCanvas)
 end
 
+---alternate draw method, call to get a drawable object for the theory current state
+---@return love.Canvas
 function AsciiTheory:getDrawable()
 	self:__drawCanvas()
 	return self.loveCanvas
 end
 
+---force repaint a specified tagged object
+---@param tag integer
 function AsciiTheory:repaint(tag)
 	if not tag or not self.objects[tag] then return end
 
@@ -412,6 +444,7 @@ function AsciiTheory:repaint(tag)
 	}
 end
 
+---force repaint for all tagged objects
 function AsciiTheory:forceRepaintAll()
 	for _, obj in pairs(self.objects) do
 		if obj and obj.tag and obj.type ~= "base" then
@@ -421,6 +454,11 @@ function AsciiTheory:forceRepaintAll()
 	self.mask = {}
 end
 
+---love mouse pressed handler
+---@param x number
+---@param y number
+---@param _button any
+---@param _istouch any
 function AsciiTheory:mousepressed(x, y, _button, _istouch)
 	for tag, object in pairs(self.objects) do
 		if object.collider and object.collider:contains(x, y) then
@@ -436,6 +474,11 @@ function AsciiTheory:mousepressed(x, y, _button, _istouch)
 	end
 end
 
+---love mouse released handler
+---@param _x number
+---@param _y number
+---@param _button any
+---@param _istouch any
 function AsciiTheory:mousereleased(_x, _y, _button, _istouch)
 	--sliderLock = nil
 end

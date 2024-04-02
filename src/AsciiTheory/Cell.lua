@@ -2,7 +2,6 @@
 
 ---@class Cell
 ---@field public type "cell"
----@field public theory AsciiTheory
 ---@field public char integer
 ---@field private fg color | string
 ---@field private bg color | string

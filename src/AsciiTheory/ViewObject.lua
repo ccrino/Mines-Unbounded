@@ -2,11 +2,14 @@
 ---@field public theory AsciiTheory
 ---@field public type string
 ---@field public id? string
----@field public tag? string
+---@field public tag? integer
 ---@field public parent? ViewObject
----@field public children? ViewObject[]
+---@field public children ViewObject[]
+---@field public __types table<string, ViewObject>
+---@field public onUpdate? fun(self, dt: number)
 local ViewObject = {
-    type = "viewObject"
+    type = "viewObject",
+    __types = {}
 }
 
 
@@ -73,6 +76,12 @@ function ViewObject:paint()
     return self:__onPaintLayer()
 end
 
+---requests a repaint on the object
+---@protected
+function ViewObject:__repaintSelf()
+    self.theory:repaint(self.tag)
+end
+
 ---event handler for when paint occurs
 ---should return the layer for the current view object
 ---@return Layer, Dim
@@ -91,5 +100,11 @@ end
 
 instanceMt.__tostring = ViewObject.tostring
 
+---registers a view object class
+---@param Class table
+function ViewObject:registerViewObjectClass(Class)
+    assert(type(Class.type) == "string", "non type class registered as ViewObject")
+    self.__types[Class.type] = Class
+end
 
 return ViewObject

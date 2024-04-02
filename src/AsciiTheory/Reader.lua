@@ -3,7 +3,6 @@ local Layer = require "AsciiTheory/Layer"
 local Cell = require "AsciiTheory/Cell"
 
 local Reader = {
-    theory = nil,
     mappedColors = {},
 }
 

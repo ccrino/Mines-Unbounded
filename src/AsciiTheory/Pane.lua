@@ -1,4 +1,4 @@
-local Dim = require "AsciiTheory/Dim"
+local ViewObject = require "AsciiTheory/ViewObject"
 
 ---@class Pane
 ---@field public type "pane"
@@ -14,7 +14,9 @@ local Pane = {
 	orientation = nil,
 }
 
-local classMt = {}
+local classMt = {
+	__index = ViewObject
+}
 setmetatable(Pane, classMt)
 
 local instanceMt = {
@@ -22,12 +24,9 @@ local instanceMt = {
 }
 
 ---create a new pane
----@param layer Layer
 ---@return Pane
-function Pane:new(layer)
-	local o = {}
-	o.layer = layer
-	o.children = {}
+function Pane:new()
+	local o = ViewObject()
 	setmetatable(o, instanceMt)
 	return o
 end
@@ -38,41 +37,13 @@ classMt.__call = Pane.new
 ---@param o table
 ---@return Pane
 function Pane:fromObject(o)
-	if o.type ~= "pane" then
-		error "Invalid base object to pane:fromObject"
-	end
-	o.children = {}
+	assert(o.type == "pane", "Invalid base object for pane:fromObject")
+
+	ViewObject:fromObject(o)
 	setmetatable(o, instanceMt)
 	return o
 end
 
----renders a layer for the object
-function Pane:paint()
-	for _, child in pairs(self.children) do
-		self.theory:repaint(child.tag)
-	end
-
-	return self.layer, Dim(0, 0, 0, 0)
-end
-
----adds view elements as children of the pane
----@param object table
-function Pane:addChild(object)
-	table.insert(self.children, object)
-	object.parent = self
-	self.theory:repaint(object.tag)
-end
-
----move the pane
----@param dx number
----@param dy number
-function Pane:move(dx, dy)
-	for _, object in pairs(self.children) do
-		object:move(dx, dy)
-	end
-	if self.layer then
-		self.layer:move(dx, dy)
-	end
-end
+ViewObject:registerViewObjectClass(Pane)
 
 return Pane
