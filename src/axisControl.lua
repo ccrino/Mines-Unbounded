@@ -4,39 +4,30 @@
 ---@field private holdDuration number
 ---@field private position integer
 ---@field private motionSmoothingOffset number
-local AxisControl = {
-    keyDownCount = 0;
-    holdDirection = 0;
-    holdDuration = 0.0;
-    position = 0;
-    motionSmoothingOffset = 0.0;
-}
+local AxisControl = {}
 
 ---constructs an axis control object
 ---@return AxisControl
 function AxisControl:new()
-    ---@type AxisControl
     local o = {
-        keyDownCount = 0;
-        holdDirection = 0;
-        holdDuration = 0;
-        position = 0;
-        motionSmoothingOffset = 0;
+        keyDownCount = 0,
+        holdDirection = 0,
+        holdDuration = 0.0,
+        position = 0,
+        motionSmoothingOffset = 0.0,
     }
-    setmetatable(o, { __index = AxisControl })
-    return o
+    ---@type AxisControl
+    return setmetatable(o, { __index = AxisControl })
 end
 
 ---update the state of the control
 ---@param dt number seconds in update tick
 function AxisControl:update(dt)
-
     if self.keyDownCount ~= 0 then
         self.position = self.position + self.keyDownCount
         self.motionSmoothingOffset = self.motionSmoothingOffset + self.keyDownCount
         self.holdDuration = 0
         self.keyDownCount = 0
-
     elseif self.holdDirection ~= 0 then
         self.holdDuration = self.holdDuration + dt
 
@@ -57,8 +48,8 @@ function AxisControl:update(dt)
         absoluteSmoothingOffset = absoluteSmoothingOffset - (10 * dt * math.max(absoluteSmoothingOffset, 1))
         self.motionSmoothingOffset =
             (absoluteSmoothingOffset >= 0.0625)
-                and absoluteSmoothingOffset * sign
-                or  0
+            and absoluteSmoothingOffset * sign
+            or 0
     end
 end
 
