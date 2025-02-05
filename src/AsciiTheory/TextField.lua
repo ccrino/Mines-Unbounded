@@ -107,14 +107,14 @@ function TextField:__onPaintLayer()
                     break
                 end
 
-                local row_offset = Utils.GetOffsetForAlignment(self.horizontalAlign, line:len(), width)
-                for j = 1, line:len() do
+                local row_offset = Utils.GetOffsetForAlignment(self.horizontalAlign, utf8.len(line), width)
+                for j = 1, utf8.len(line) do
                     local x = j + row_offset
                     if x > width then
                         break
                     end
 
-                    local char = line:sub(j, j)
+                    local char = line:sub(utf8.offset(line, j), utf8.offset(line, j + 1) - 1)
                     local code = SymbolDictionary[char]
                     layer:setCell(x, y, Cell:new(code, self.fg, self.bg))
                 end

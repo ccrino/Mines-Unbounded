@@ -1,3 +1,5 @@
+utf8 = require "utf8"
+
 local Utils = {}
 
 ---splits a string into multiple pieces by a delimiter
@@ -40,35 +42,35 @@ local function wrapWords(text, maxLength)
 
     local line = ""
     for _, word in iDelimedLines(text, " ") do
-        if line:len() == 0 then
+        if utf8.len(line) == 0 then
             -- first word on a line
             -- split really long words as necessary
-            while word:len() >= maxLength - 1 do
-                table.insert(lines, word:sub(1, maxLength))
-                word = word:sub(maxLength + 1)
+            while utf8.len(word) >= maxLength - 1 do
+                table.insert(lines, word:sub(1, utf8.offset(word, maxLength + 1) - 1))
+                word = word:sub(utf8.offset(word, maxLength + 1))
             end
             line = word
-        elseif line:len() + word:len() + 1 <= maxLength then
+        elseif utf8.len(line) + utf8.len(word) + 1 <= maxLength then
             -- new word in line, which doesn't need to wrap
             line = line .. " " .. word
             -- if long enough or close enough, flush into list
-            if line:len() >= maxLength - 1 then
+            if utf8.len(line) >= maxLength - 1 then
                 table.insert(lines, line)
                 line = ""
             end
-        elseif word:len() < maxLength - 1 then
+        elseif utf8.len(word) < maxLength - 1 then
             -- line is too long for a new word, and new word is reasonably sized
             table.insert(lines, line)
             line = word
         else
             -- else line is too long, and word is too long to keep as a unit
-            local leftoverSpace = maxLength - 1 - line:len()
-            table.insert(lines, line .. " " .. word:sub(1, leftoverSpace))
-            word = word:sub(leftoverSpace + 1)
+            local leftoverSpace = maxLength - 1 - utf8.len(line)
+            table.insert(lines, line .. " " .. word:sub(1, utf8.offset(word, leftoverSpace + 1) - 1))
+            word = word:sub(utf8.offset(word, leftoverSpace + 1))
             -- split really long words as necessary
-            while word:len() >= maxLength - 1 do
-                table.insert(lines, word:sub(1, maxLength))
-                word = word:sub(maxLength + 1)
+            while utf8.len(word) >= maxLength - 1 do
+                table.insert(lines, word:sub(1, utf8.offset(word, maxLength + 1) - 1))
+                word = word:sub(utf8.offset(word, maxLength + 1))
             end
             line = word
         end
@@ -92,8 +94,8 @@ function Utils.SplitTextIntoLines(text, maxWidth)
     local lines = {}
 
     for _, line in iDelimedLines(text, "\n") do
-        if line:len() > maxWidth then
-            for _, subline in ipairs(wrapWords(text, maxWidth)) do
+        if utf8.len(line) > maxWidth then
+            for _, subline in ipairs(wrapWords(line, maxWidth)) do
                 table.insert(lines, subline)
             end
         else
