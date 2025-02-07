@@ -1,15 +1,16 @@
 require "common"
 local MINE_ESCALATION_RATE = 0.9999
 
----@class Cell
+---@class Board.Cell
 ---@field state STATE
 ---@field value VALUE
+---@field extra any
 
 
 ---@class Board
 ---@field onScoreChangeHandler fun(score: integer)?
 ---@field onCellGradualRevealHandler fun(x: integer, y: integer, depth: integer)?
----@field cells table<integer, table<integer, Cell>>
+---@field cells table<integer, table<integer, Board.Cell>>
 local Board = {
     mineWeight = MINE_ESCALATION_RATE,
     cleared = 0,
@@ -47,8 +48,21 @@ function Board:beginGame(boardX, boardY)
 end
 
 ---sets the board to end state
-function Board:endGame()
+---@param boardX integer x component of the losing cell move
+---@param boardY integer y component of the losing cell move
+function Board:endGame(boardX, boardY)
     self.isGameOver = true
+
+    for ry, row in pairs(self.cells) do
+        local yDist = math.abs(boardY - ry)
+        for rx, cell in pairs(row) do
+            if cell.value == VALUE.MINE then
+                local priorState = cell.state
+                cell.state = STATE.SEEN
+                self:onCellExplodeReveal(rx, ry, math.max(math.abs(boardX - rx), yDist), priorState)
+            end
+        end
+    end
 end
 
 ---event called when score value changes
@@ -78,6 +92,23 @@ end
 ---@param handler fun(x: integer, y: integer, depth: integer)
 function Board:setCellGradualRevealHandler(handler)
     self.onCellGradualRevealHandler = handler
+end
+
+---event called when a cell is revealed 'explosively'
+---@param x integer
+---@param y integer
+---@param distance integer the distance from the triggering reveal
+---@param priorState STATE
+function Board:onCellExplodeReveal(x, y, distance, priorState)
+    if self.onCellExplodeRevealHandler then
+        self.onCellExplodeRevealHandler(x, y, distance, priorState)
+    end
+end
+
+---sets an external function to be called when a cell is revealed 'explosively'
+---@param handler fun(x: integer, y: integer, distance: integer, priorState: STATE)
+function Board:setCellExplodeRevealHandler(handler)
+    self.onCellExplodeRevealHandler = handler
 end
 
 ---entry point for primary mouse action event(s)
@@ -133,7 +164,7 @@ function Board:revealCell(x, y)
 
     if cell.value == VALUE.MINE then
         cell.state = STATE.SEEN
-        self:endGame()
+        self:endGame(x, y)
     else
         self:calculateValue(x, y)
         if cell.value == VALUE.NONE then
@@ -142,6 +173,8 @@ function Board:revealCell(x, y)
             cell.state = STATE.SEEN
             self.cleared = self.cleared + 1
         end
+
+        self:decayRegion(x, y)
 
         self:onScoreChange()
     end
@@ -174,11 +207,74 @@ function Board:revealRegion(x, y)
     end
 end
 
+---decay mines within a region
+---@param x integer
+---@param y integer
+function Board:decayRegion(x, y)
+    local queuePointer = 1
+    local queue = { { x, y, 1 } }
+    local function insertToQueue(lx, ly, depth)
+        table.insert(queue, { lx, ly, depth })
+    end
+
+    self:doNeighbor(x, y, insertToQueue, 2)
+
+    local neighborsSatisfied = true
+    local function checkSatisfied(lx, ly)
+        local lcell = self:getCell(lx, ly)
+        if lcell.value ~= VALUE.MINE then
+            local unseenNeighbors = 0
+            local mineNeighbors = 0
+            self:doNeighbor(lx, ly, function(llx, lly)
+                local llcell = self:getCell(llx, lly)
+                if llcell.state ~= STATE.SEEN then
+                    unseenNeighbors = unseenNeighbors + 1
+                end
+                if llcell.value == VALUE.MINE then
+                    mineNeighbors = mineNeighbors + 1
+                end
+            end)
+
+            if unseenNeighbors ~= mineNeighbors then
+                neighborsSatisfied = false
+            end
+        end
+    end
+
+    local function recalcValue(lx, ly)
+        local lcell = self:getCell(lx, ly)
+        if lcell.value ~= VALUE.MINE then
+            self:calculateValue(lx, ly)
+        end
+    end
+
+    while (queuePointer <= #queue) do
+        local lx, ly, depth = unpack(queue[queuePointer])
+        local cell = self:getCell(lx, ly)
+        if not cell.extra then
+            neighborsSatisfied = true
+            self:doNeighbor(lx, ly, checkSatisfied)
+
+            if neighborsSatisfied then
+                cell.extra = true
+                cell.value = VALUE.NONE
+                cell.state = STATE.SEEN
+
+                self:calculateValue(lx, ly)
+                self:doNeighbor(lx, ly, recalcValue)
+
+                self:doNeighbor(lx, ly, insertToQueue, depth + 1)
+            end
+        end
+        queuePointer = queuePointer + 1
+    end
+end
+
 ---get the cell at the specified coordinates
 ---if not present, generates a new cell on demand
 ---@param x integer
 ---@param y integer
----@return Cell
+---@return Board.Cell
 function Board:getCell(x, y)
     if not self.cells[y] then
         self.cells[y] = {}
@@ -192,7 +288,7 @@ end
 ---get the cell without generating on demand
 ---@param x integer
 ---@param y integer
----@return Cell?
+---@return Board.Cell?
 function Board:rawGetCell(x, y)
     if x == math.huge or y == math.huge then
         return nil
@@ -221,7 +317,7 @@ end
 
 ---creates a cell
 ---@param forceClear boolean? flag to prevent mine generation
----@return Cell
+---@return Board.Cell
 function Board:makeCell(forceClear)
     local cell = {}
     cell.state = STATE.UNSEEN
@@ -239,8 +335,8 @@ end
 ---performs a provided callback on all neighbors of a coordinate location
 ---@param x integer
 ---@param y integer
----@param callback fun(x: integer, y: integer, ...: any[])
----@param ... any[] additional parameters for callback
+---@param callback fun(x: integer, y: integer, ...: any)
+---@param ... any additional parameters for callback
 function Board:doNeighbor(x, y, callback, ...)
     callback(x - 1, y - 1, ...)
     callback(x - 1, y, ...)
@@ -250,6 +346,22 @@ function Board:doNeighbor(x, y, callback, ...)
     callback(x + 1, y - 1, ...)
     callback(x + 1, y, ...)
     callback(x + 1, y + 1, ...)
+end
+
+---performs a provided callback on all 2 distance neighbors of a coordinate location
+---@param n integer
+---@param x integer
+---@param y integer
+---@param callback fun(x: integer, y: integer, ...: any)
+---@param ... any additional parameters for callback
+function Board:doNthDistanceNeighbors(n, x, y, callback, ...)
+    for ix = -n, n do
+        for iy = -n, n do
+            if ix ~= 0 or iy ~= 0 then
+                callback(x + ix, y + iy, ...)
+            end
+        end
+    end
 end
 
 ---checks if two coordinate pairs are adjacent
@@ -315,7 +427,7 @@ end
 ---@return true flag indicating validity
 ---@return number weight
 ---@return integer cleared
----@return table<integer, table<integer, Cell>> cells
+---@return table<integer, table<integer, Board.Cell>> cells
 ---@overload fun(file: love.File): false
 function Board:loadFromFileInternal(file)
     if not file:open("r") then

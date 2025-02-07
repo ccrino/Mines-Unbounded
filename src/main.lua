@@ -6,12 +6,37 @@ require "common"
 local Config = require "config"
 local AxisControl = require "axisControl"
 local Theory = require "AsciiTheory"
+local TheorySymbols = require "AsciiTheory/SymbolDictionary"
 local Scene = require "scene"
 local Board = require "board"
 
 local commands = {}
-local gameState = {}
 local mine = {}
+
+---@class gameState
+---@field xAxisControl AxisControl
+---@field yAxisControl AxisControl
+---@field SCALE integer
+---@field MAP_SCALE integer
+---@field VIEW_OFFSET_X integer
+---@field VIEW_OFFSET_Y integer
+---@field VIEW_WIDTH integer
+---@field VIEW_HEIGHT integer
+---@field SCREEN_HEIGHT integer
+---@field SCREEN_WIDTH integer
+---@field UIStateCanvas table<UI_STATE, love.Canvas>
+---@field boardCanvas love.Canvas
+---@field mapCanvas love.Canvas
+---@field demoCanvas love.Canvas
+---@field boardText love.Text
+---@field exampleText love.Text
+---@field demoText love.Text
+---@field Demo { rawGetCell: fun(self, x: integer, y: integer): (Board.Cell | nil) }
+---@field LossAnimationState table | nil
+---@field AnimatingLoss boolean | nil
+---@field keyboardNavigation boolean | nil
+---@field mapMode boolean | nil
+local gameState = {}
 
 ---@enum UI_STATE
 local UI_STATE = {
@@ -32,16 +57,17 @@ function love.load()
         [[└┴┬├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀]] ..
         [[αßΓπΣσµτΦΘΩδ∞φε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■ ]]
     )
+    font:setFilter("nearest", "nearest")
     love.graphics.setFont(font)
     love.graphics.setDefaultFilter("nearest", "nearest", 0)
-    Theory:Init(94, 50)
+    Theory:Init(47, 50)
     Theory:registerCommandHandlers(commands)
 
     Scene()
 
     Config:load()
     local paletteStr = Utils.zeroLeftPad(Config:getPaletteNumber(), 3)
-    Theory:getElementById("paletteReadout") --[[@as TextField]]
+    Theory:getElementById(ManagedObjects.PaletteReadout) --[[@as TextField]]
         :setText(paletteStr)
 
     local palette = Config:getPaletteBase()
@@ -51,6 +77,7 @@ function love.load()
     gameState = {
         --view constant
         SCALE = 16,
+        MAP_SCALE = 4,
         VIEW_OFFSET_X = 7,
         VIEW_OFFSET_Y = 7,
         VIEW_WIDTH = 32,
@@ -59,6 +86,9 @@ function love.load()
         SCREEN_WIDTH = 47,
         --view variables
         boardCanvas = love.graphics.newCanvas(),
+        boardText = love.graphics.newText(font),
+        mapCanvas = love.graphics.newCanvas(),
+
         Demo = {
             [3] = {
                 [4] = { state = 1, value = "3" },
@@ -100,6 +130,15 @@ function love.load()
                 [8] = { state = 1, value = "3" },
                 [9] = { state = 1, value = "2" }
             },
+
+            rawGetCell = function(self, x, y)
+                if x == math.huge or y == math.huge then
+                    return nil
+                elseif not self[y] or not self[y][x] then
+                    return nil
+                end
+                return self[y][x]
+            end
         },
 
         previousUIState = nil,
@@ -115,8 +154,11 @@ function love.load()
         UIStateSlideY = 0,
 
         demoCanvas = love.graphics.newCanvas(),
+        demoText = love.graphics.newText(font),
+        exampleText = love.graphics.newText(font),
 
         animatingList = {},
+        explodeList = {},
 
         --Interface variables
         mouseX = 0,
@@ -129,21 +171,31 @@ function love.load()
 
     Board:setScoreChangeHandler(function(score)
         local scoreStr = Utils.zeroLeftPad(score, 7)
-        Theory:getElementById("scoreLabel") --[[@as TextField]]
+        Theory:getElementById(ManagedObjects.ScoreLabel) --[[@as TextField]]
             :setText(scoreStr)
     end)
     Board:setCellGradualRevealHandler(function(x, y, depth)
         local cell = Board:getCell(x, y)
         gameState.animatingList[cell] = depth * 0.1
     end)
+    Board:setCellExplodeRevealHandler(function(x, y, distance, priorState)
+        local cell = Board:getCell(x, y)
+        gameState.explodeList[cell] = { t = 1 + (distance / 4), x = x, y = y, ps = priorState }
+    end)
     Board:newGame()
 end
 
 function commands.newGame()
+    mine.hideLossAnimation()
+    gameState.animatingList = {}
+    gameState.explodeList = {}
     Board:newGame()
 end
 
 function commands.openMenu()
+    if gameState.AnimatingLoss then
+        return
+    end
     mine.setUIState(UI_STATE.MENU)
 end
 
@@ -164,7 +216,7 @@ function commands.toggleCheck()
 end
 
 function commands.setToDefault()
-    Config:setDefault()
+    Config:setDefault(true)
 end
 
 local function updatePalette()
@@ -172,7 +224,7 @@ local function updatePalette()
     Theory:setMappedColors(palette)
     love.graphics.setBackgroundColor(palette.darkest)
     local paletteStr = Utils.zeroLeftPad(Config:getPaletteNumber(), 3)
-    Theory:getElementById("paletteReadout") --[[@as TextField]]
+    Theory:getElementById(ManagedObjects.PaletteReadout) --[[@as TextField]]
         :setText(paletteStr)
 end
 
@@ -184,6 +236,17 @@ end
 function commands.rightPalette()
     Config:rotatePalette(1)
     updatePalette()
+end
+
+local function updateGamemode()
+end
+
+function commands.leftGamemode()
+    updateGamemode()
+end
+
+function commands.rightGamemode()
+    updateGamemode()
 end
 
 function mine.setUIState(state)
@@ -213,6 +276,68 @@ function mine.isInMenuState()
     return gameState.UIState == UI_STATE.MENU and not mine.isInChangeStateInProgress()
 end
 
+function mine.showLossAnimation()
+    if not mine.isInGameState() then
+        return
+    end
+
+    gameState.AnimatingLoss = true
+    gameState.LossAnimationState = {
+        signalLostTimer = Utils.new_timer(0.5),
+        expirationTimer = Utils.new_timer(2.5),
+        animationTimer = Utils.new_timer(0.1),
+        commandText = {},
+        showBoard = true,
+    }
+end
+
+function mine.updateLossAnimation(dt)
+    if gameState.LossAnimationState.signalLostTimer then
+        if gameState.LossAnimationState.signalLostTimer(dt) then
+            local gameWindow = Theory:getElementById(ManagedObjects.GameWindow) --[[@as Window]]
+            local signalLostWindow = Theory:getElementById(ManagedObjects.SignalLostWindow) --[[@as Window]]
+            Theory:attach(gameWindow, signalLostWindow)
+            Theory:forceRepaintAll()
+
+            gameState.LossAnimationState.signalLostTimer = nil
+            gameState.LossAnimationState.showBoard = false
+        end
+    elseif gameState.LossAnimationState.animationTimer(dt) then
+        gameState.LossAnimationState.showBoard =
+            love.math.random(0, 6) >=
+            (gameState.LossAnimationState.showBoard and 5 or 6)
+        local chunks = Utils.clamp(love.math.random(0, 2) + love.math.random(0, 2) + love.math.random(-1, 0), 0, 4)
+        local commandString = ""
+        for i = 1, chunks do
+            for _ = 1, 3 do
+                commandString = commandString .. TheorySymbols[love.math.random(1, 128)]
+            end
+            if i ~= chunks then
+                commandString = commandString .. " "
+            end
+        end
+
+        if #gameState.LossAnimationState.commandText > 13 then
+            table.remove(gameState.LossAnimationState.commandText, 1)
+        end
+        table.insert(gameState.LossAnimationState.commandText, commandString)
+
+        local commandsField = Theory:getElementById(ManagedObjects.SignalDump) --[[@as TextField]]
+        commandsField:setText(table.concat(gameState.LossAnimationState.commandText, "\n"))
+        Theory:forceRepaintAll()
+    end
+end
+
+function mine.hideLossAnimation()
+    gameState.AnimatingLoss = nil
+    gameState.LossAnimationState = nil
+
+    local signalLostWindow = Theory:getElementById(ManagedObjects.SignalLostWindow) --[[@as Window]]
+    Theory:detach(signalLostWindow)
+end
+
+local was_exploding = false
+local explode_velocity = 1
 function love.update(dt)
     jprof.push "frame"
     jprof.push "update"
@@ -221,6 +346,14 @@ function love.update(dt)
         gameState.mouseX, gameState.mouseY = love.mouse.getPosition()
     end
     Theory:update(dt)
+
+    if gameState.AnimatingLoss then
+        if gameState.LossAnimationState.expirationTimer(dt) then
+            mine.hideLossAnimation()
+        else
+            mine.updateLossAnimation(dt)
+        end
+    end
 
     if mine.isInGameState() then
         gameState.xAxisControl:update(dt)
@@ -234,6 +367,23 @@ function love.update(dt)
         else
             gameState.animatingList[cell] = time
         end
+    end
+
+    if next(gameState.explodeList) ~= nil then
+        if was_exploding then
+            explode_velocity = explode_velocity + dt
+        else
+            explode_velocity = 1
+        end
+
+        for cell, o in pairs(gameState.explodeList) do
+            o.t = o.t - (explode_velocity * dt)
+            if o.t <= 0 then
+                gameState.explodeList[cell] = nil
+            end
+        end
+
+        was_exploding = true
     end
 
     mine.handleUIStateChange(dt)
@@ -283,9 +433,9 @@ end
 ---@return Window
 function mine.getTheoryElementForState(state)
     if state == UI_STATE.GAME then
-        return Theory:getElementById("gameWindow") --[[@as Window]]
+        return Theory:getElementById(ManagedObjects.GameWindow) --[[@as Window]]
     elseif state == UI_STATE.MENU then
-        return Theory:getElementById("menuWindow") --[[@as Window]]
+        return Theory:getElementById(ManagedObjects.MenuWindow) --[[@as Window]]
     else
         error "Unknown UI state provided to get view element"
     end
@@ -305,12 +455,6 @@ function love.draw()
     else
         mine.drawUIState(mine.getCurrentUIState())
     end
-
-    --[[
-    love.graphics.print(
-        "[" .. math.floor(gameState.mouseX / gameState.SCALE) ..
-        "," .. math.floor(gameState.mouseY / gameState.SCALE) .. "]")
-    --]]
 
     jprof.pop "frame"
 end
@@ -340,7 +484,9 @@ function mine.drawUIStateGame()
     Theory:draw()
 
     love.graphics.setColor(COLORS.white)
-    if not gameState.mapMode then
+    if gameState.AnimatingLoss and not gameState.LossAnimationState.showBoard then
+        -- do nothing
+    elseif not gameState.mapMode then
         mine.printBoard()
     else
         mine.printMapMode()
@@ -354,24 +500,33 @@ function mine.drawUIStateMenu()
     mine.printDemoBoard()
 end
 
-function love.mousepressed(x, y, button)
-    Theory:mousepressed(x, y, button)
-
-    if mine.isInGameState() then
+function mine.actOnBoard(x, y, isPrimary)
+    if mine.isInGameState() and not gameState.mapMode then
         local viewX = math.floor(x / gameState.SCALE)
         local viewY = math.floor(y / gameState.SCALE)
         if not mine.isViewCoordWithinBoard(viewX, viewY) then
             return
         end
 
+        local wasGameOver = Board.isGameOver
         local boardX, boardY = mine.viewToBoard(viewX, viewY)
 
-        if button == 1 then
+        if isPrimary then
             Board:primaryAction(boardX, boardY)
-        elseif button == 2 then
+        else
             Board:secondaryAction(boardX, boardY)
         end
+
+        if not wasGameOver and Board.isGameOver then
+            mine.showLossAnimation()
+        end
     end
+end
+
+function love.mousepressed(x, y, button)
+    Theory:mousepressed(x, y, button)
+
+    mine.actOnBoard(x, y, button == 1)
 end
 
 local KeyBindings = {
@@ -384,6 +539,11 @@ local KeyBindings = {
         KEYBOARD_LEFT_CLICK = "j",
         MOUSE_MODE = "m",
         MAP_MODE = "z",
+        MAP_ZOOM_IN = "=",
+        MAP_ZOOM_OUT = "-",
+        DEBUG = "f12",
+        INVERT = "f3",
+        DUMP_COLOR = "f5",
     },
     { -- secondary binding
         UP = "up",
@@ -393,13 +553,32 @@ local KeyBindings = {
     },
 }
 
-local KeyMap = {}
-for i, binding in ipairs(KeyBindings) do
-    KeyMap[i] = {}
-    for bind, key in pairs(binding) do
-        KeyMap[i][key] = bind
+local GamePadBindings = {
+    {
+        UP = "dpup",
+        DOWN = "dpdown",
+        LEFT = "dpleft",
+        RIGHT = "dpright",
+        KEYBOARD_RIGHT_CLICK = "b",
+        KEYBOARD_LEFT_CLICK = "a",
+        MAP_MODE = "x",
+    },
+    {}
+}
+
+local function bindingToMap(bindingList)
+    local map = {}
+    for i, binding in ipairs(bindingList) do
+        map[i] = {}
+        for bind, key in pairs(binding) do
+            map[i][key] = bind
+        end
     end
+    return map
 end
+
+local KeyMap = bindingToMap(KeyBindings)
+local GamePadMap = bindingToMap(GamePadBindings)
 
 function love.keypressed(key)
     local bind = KeyMap[1][key] or KeyMap[2][key]
@@ -416,15 +595,15 @@ function love.keypressed(key)
         gameState.xAxisControl:keyDown(1)
     elseif bind == "KEYBOARD_RIGHT_CLICK" then
         if gameState.keyboardNavigation then
-            love.mousepressed(gameState.mouseX, gameState.mouseY, 2)
-        else
+            mine.actOnBoard(gameState.mouseX, gameState.mouseY, false)
+        elseif not gameState.mapMode then
             gameState.keyboardNavigation = true
             gameState.mouseX = (gameState.VIEW_OFFSET_X + gameState.VIEW_WIDTH / 2) * gameState.SCALE
             gameState.mouseY = (gameState.VIEW_OFFSET_Y + gameState.VIEW_HEIGHT / 2) * gameState.SCALE
         end
     elseif bind == "KEYBOARD_LEFT_CLICK" then
         if gameState.keyboardNavigation then
-            love.mousepressed(gameState.mouseX, gameState.mouseY, 1)
+            mine.actOnBoard(gameState.mouseX, gameState.mouseY, true)
         end
     elseif bind == "MOUSE_MODE" then
         if gameState.keyboardNavigation then
@@ -432,6 +611,32 @@ function love.keypressed(key)
         end
     elseif bind == "MAP_MODE" then
         gameState.mapMode = not gameState.mapMode
+        if gameState.mapMode then
+            gameState.xAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+            gameState.yAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+        else
+            gameState.xAxisControl:setSpeed(1)
+            gameState.yAxisControl:setSpeed(1)
+        end
+    elseif bind == "MAP_ZOOM_IN" then
+        if gameState.mapMode and gameState.MAP_SCALE < 8 then
+            gameState.MAP_SCALE = gameState.MAP_SCALE * 2
+            gameState.xAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+            gameState.yAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+        end
+    elseif bind == "MAP_ZOOM_OUT" then
+        if gameState.mapMode and gameState.MAP_SCALE > 1 then
+            gameState.MAP_SCALE = gameState.MAP_SCALE / 2
+            gameState.xAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+            gameState.yAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+        end
+    elseif bind == "INVERT" then
+        Config:invertPalette()
+        updatePalette()
+    elseif bind == "DUMP_COLOR" then
+        Config:dumpColors()
+    elseif bind == "DEBUG" then
+        debug.debug()
     end
 end
 
@@ -450,50 +655,82 @@ function love.keyreleased(key)
     end
 end
 
-function mine.printBoard()
-    local previousCanvas = love.graphics.getCanvas()
+function love.gamepadpressed(_joystick, button)
+    local bind = GamePadMap[1][button] or GamePadMap[2][button]
+    print(button, bind)
+    if not bind then return end
 
-    love.graphics.setCanvas { gameState.boardCanvas, stencil = true }
-    local text = love.graphics.newText(font)
-
-    local mouseBoardX, mouseBoardY = mine.mouseToBoardCoords()
-    local doChecks = Config:getShowChecks()
-
-    local xPositionAdjust = gameState.xAxisControl:getSmoothedPositionOffset()
-    local yPositionAdjust = gameState.yAxisControl:getSmoothedPositionOffset()
-
-    for y = gameState.VIEW_OFFSET_Y - 1, gameState.VIEW_OFFSET_Y + gameState.VIEW_HEIGHT + 1 do
-        for x = gameState.VIEW_OFFSET_X - 1, gameState.VIEW_OFFSET_X + gameState.VIEW_WIDTH + 1 do
-            local cellX, cellY = mine.viewToBoard(x, y)
-            local cell = Board:rawGetCell(cellX + xPositionAdjust, cellY + yPositionAdjust)
-            local isChecker = doChecks and (cellX + cellY) % 2 ~= 0
-            local inHalo = Board:isNeighbor(cellX, cellY, mouseBoardX, mouseBoardY)
-
-            mine.printCell(text, cell, x, y, isChecker, inHalo)
+    if bind == "UP" then
+        gameState.yAxisControl:keyDown(-1)
+    elseif bind == "DOWN" then
+        gameState.yAxisControl:keyDown(1)
+    elseif bind == "LEFT" then
+        gameState.xAxisControl:keyDown(-1)
+    elseif bind == "RIGHT" then
+        gameState.xAxisControl:keyDown(1)
+    elseif bind == "KEYBOARD_RIGHT_CLICK" then
+        if gameState.keyboardNavigation then
+            mine.actOnBoard(gameState.mouseX, gameState.mouseY, false)
+        elseif not gameState.mapMode then
+            gameState.keyboardNavigation = true
+            gameState.mouseX = (gameState.VIEW_OFFSET_X + gameState.VIEW_WIDTH / 2) * gameState.SCALE
+            gameState.mouseY = (gameState.VIEW_OFFSET_Y + gameState.VIEW_HEIGHT / 2) * gameState.SCALE
+        end
+    elseif bind == "KEYBOARD_LEFT_CLICK" then
+        if gameState.keyboardNavigation then
+            mine.actOnBoard(gameState.mouseX, gameState.mouseY, true)
+        end
+    elseif bind == "MAP_MODE" then
+        gameState.mapMode = not gameState.mapMode
+        if gameState.mapMode then
+            gameState.xAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+            gameState.yAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
+        else
+            gameState.xAxisControl:setSpeed(1)
+            gameState.yAxisControl:setSpeed(1)
         end
     end
-
-    love.graphics.stencil(function()
-        love.graphics.rectangle('fill',
-            gameState.VIEW_OFFSET_X * gameState.SCALE,
-            gameState.VIEW_OFFSET_Y * gameState.SCALE,
-            (gameState.VIEW_WIDTH + 1) * gameState.SCALE,
-            (gameState.VIEW_HEIGHT + 1) * gameState.SCALE)
-    end)
-
-    love.graphics.setStencilTest("greater", 0)
-    love.graphics.draw(text)
-    love.graphics.setStencilTest()
-
-    love.graphics.setCanvas(previousCanvas)
-    love.graphics.draw(gameState.boardCanvas)
 end
 
-local mapCanvas = love.graphics.newCanvas()
+function love.gamepadreleased(_joystick, button)
+    local bind = GamePadMap[1][button] or GamePadMap[2][button]
+    if not bind then return end
+
+    if bind == "UP" then
+        gameState.yAxisControl:keyUp(-1)
+    elseif bind == "DOWN" then
+        gameState.yAxisControl:keyUp(1)
+    elseif bind == "LEFT" then
+        gameState.xAxisControl:keyUp(-1)
+    elseif bind == "RIGHT" then
+        gameState.xAxisControl:keyUp(1)
+    end
+end
+
+function love.gamepadaxis(_joystick, axis, value)
+    if axis == "leftx" then
+        gameState.xAxisControl:axisUpdate(value)
+    elseif axis == "lefty" then
+        gameState.yAxisControl:axisUpdate(value)
+    end
+end
+
+function mine.printBoard()
+    mine.printBoardInternal(
+        gameState.boardCanvas,
+        gameState.boardText,
+        gameState.VIEW_OFFSET_X, gameState.VIEW_OFFSET_Y,
+        gameState.VIEW_WIDTH, gameState.VIEW_HEIGHT,
+        gameState.xAxisControl:getPosition(),
+        gameState.yAxisControl:getPosition(),
+        Board
+    )
+end
+
 function mine.printMapMode()
     local doChecks = Config:getShowChecks()
     local paletteExt = Config:getPaletteExt()
-    local RESCALE = 4
+    local RESCALE = gameState.MAP_SCALE
 
     local xmin = 0
     local xmax = ((gameState.VIEW_WIDTH + 1) * gameState.SCALE / RESCALE) - 1
@@ -501,19 +738,22 @@ function mine.printMapMode()
     local ymin = 0
     local ymax = ((gameState.VIEW_HEIGHT + 1) * gameState.SCALE / RESCALE) - 1
 
+    local xBoardZoomInset = math.floor((xmax - gameState.VIEW_WIDTH) / 2)
+    local yBoardZoomInset = math.floor((ymax - gameState.VIEW_HEIGHT) / 2)
+
     local cellOffsetX = gameState.xAxisControl:getPosition()
-        - (gameState.VIEW_WIDTH / 2) * (gameState.SCALE / RESCALE)
-        + (gameState.VIEW_WIDTH / 2)
+        - xBoardZoomInset
+        - gameState.xAxisControl:getSmoothedPositionOffset()
 
     local cellOffsetY = gameState.yAxisControl:getPosition()
-        - (gameState.VIEW_HEIGHT / 2) * (gameState.SCALE / RESCALE)
-        + (gameState.VIEW_HEIGHT / 2)
+        - yBoardZoomInset
+        - gameState.yAxisControl:getSmoothedPositionOffset()
 
     local viewOffsetX = gameState.VIEW_OFFSET_X * gameState.SCALE
     local viewOffsetY = gameState.VIEW_OFFSET_Y * gameState.SCALE
 
     local previousCanvas = love.graphics.getCanvas()
-    love.graphics.setCanvas(mapCanvas)
+    love.graphics.setCanvas(gameState.mapCanvas)
 
     for y = ymin, ymax do
         for x = xmin, xmax do
@@ -528,7 +768,7 @@ function mine.printMapMode()
                 color = isChecker and paletteExt.tiledark or paletteExt.tilelite
             elseif cell.state == STATE.FLAGGED then
                 color = Config:getSymbolColor(VALUE.FLAG)
-            elseif cell.value == VALUE.NONE then
+            elseif cell.value == VALUE.NONE or cell.extra then
                 color = isChecker and paletteExt.bgdark or paletteExt.bglite
             else
                 color = Config:getSymbolColor(cell.value)
@@ -539,66 +779,155 @@ function mine.printMapMode()
     end
 
     love.graphics.setColor(COLORS.white)
+    love.graphics.rectangle("line",
+        viewOffsetX + xBoardZoomInset * RESCALE,
+        viewOffsetY + yBoardZoomInset * RESCALE,
+        (gameState.VIEW_WIDTH + 1) * RESCALE,
+        (gameState.VIEW_HEIGHT + 1) * RESCALE)
+
+
     love.graphics.setCanvas(previousCanvas)
-    love.graphics.draw(mapCanvas)
+    love.graphics.draw(gameState.mapCanvas)
 end
 
 function mine.printExampleNumbers()
-    local text = love.graphics.newText(font)
+    gameState.exampleText:clear()
 
     local row1 = { VALUE.ONE, VALUE.TWO, VALUE.THREE, VALUE.FOUR, VALUE.FIVE }
     local row2 = { VALUE.SIX, VALUE.SEVEN, VALUE.EIGHT, VALUE.FLAG, VALUE.MINE }
     local palette = Config:getPaletteBase()
 
     for i = 1, 5 do
-        local x = 12 + 4 * (i - 1)
-        mine.printToText(text, row1[i], Config:getSymbolColor(row1[i]), x, 14, palette.darkest)
-        mine.printToText(text, row2[i], Config:getSymbolColor(row2[i]), x, 18, palette.darkest)
+        local x = 11 + 3 * (i - 1)
+        mine.printToText(gameState.exampleText, row1[i], Config:getSymbolColor(row1[i]), x, 32, palette.darkest)
+        mine.printToText(gameState.exampleText, row2[i], Config:getSymbolColor(row2[i]), x, 35, palette.darkest)
     end
 
-    love.graphics.draw(text)
+    love.graphics.draw(gameState.exampleText)
 end
 
 function mine.printDemoBoard()
-    local viewOffsetX = 25
-    local viewOffsetY = 26
-    local viewWidth = 10
-    local viewHeight = 10
+    mine.printBoardInternal(
+        gameState.demoCanvas,
+        gameState.demoText,
+        26, 12,
+        10, 10,
+        1, 0,
+        gameState.Demo
+    )
+end
+
+---internal shared implementation of print board, used by demo and normal board
+---@param canvas love.Canvas
+---@param textObject love.Text
+---@param viewOffsetX integer
+---@param viewOffsetY integer
+---@param viewWidth integer
+---@param viewHeight integer
+---@param boardOffsetX integer
+---@param boardOffsetY integer
+---@param boardAccessor { rawGetCell: fun(self: any, x: integer, y: integer): (Board.Cell | nil) }
+function mine.printBoardInternal(canvas, textObject,
+                                 viewOffsetX, viewOffsetY,
+                                 viewWidth, viewHeight,
+                                 boardOffsetX, boardOffsetY,
+                                 boardAccessor)
     local previousCanvas = love.graphics.getCanvas()
-    love.graphics.setCanvas(gameState.demoCanvas)
-    local demoText = love.graphics.newText(font)
+    love.graphics.setCanvas({ canvas, stencil = true } --[[@as table]])
+
+    textObject:clear()
 
     local mouseBoardX, mouseBoardY = mine.mouseToBoardCoords(
         viewOffsetX, viewOffsetY,
         viewWidth, viewHeight,
-        1, 0
+        boardOffsetX, boardOffsetY
     )
     local doChecks = Config:getShowChecks()
-    for y = viewOffsetY, viewOffsetY + viewHeight do
-        for x = viewOffsetX, viewOffsetX + viewHeight do
-            local cellX, cellY = mine.viewToBoard(x, y, viewOffsetX, viewOffsetY, 1, 0)
-            local cell = mine.rawGetDemoCell(cellX, cellY)
-            local isChecker = doChecks and (cellX + cellY) % 2 ~= 0
-            local isHalo = Board:isNeighbor(cellX, cellY, mouseBoardX, mouseBoardY)
 
-            mine.printCell(demoText, cell, x, y, isChecker, isHalo)
+    local xPositionAdjust = gameState.xAxisControl:getSmoothedPositionOffset()
+    local yPositionAdjust = gameState.yAxisControl:getSmoothedPositionOffset()
+
+    -- handle normal cells
+    for y = viewOffsetY - 1, viewOffsetY + viewHeight + 1 do
+        for x = viewOffsetX - 1, viewOffsetX + viewWidth + 1 do
+            local cellX, cellY = mine.viewToBoard(x, y, viewOffsetX, viewOffsetY, boardOffsetX, boardOffsetY)
+            local cell = boardAccessor:rawGetCell(cellX + xPositionAdjust, cellY + yPositionAdjust)
+            local isChecker = doChecks and (cellX + cellY) % 2 ~= 0
+            local inHalo = Board:isNeighbor(cellX, cellY, mouseBoardX, mouseBoardY)
+
+            mine.printCell(textObject, cell, x, y, isChecker, inHalo)
         end
     end
-    love.graphics.draw(demoText)
-    love.graphics.setCanvas(previousCanvas)
 
-    love.graphics.draw(gameState.demoCanvas)
-end
+    -- handle exploding cells, must be after normal cells to get correct draw order
+    for _, object in pairs(gameState.explodeList) do
+        local objectScreenX = object.x + viewOffsetX - boardOffsetX
+        local objectScreenY = object.y + viewOffsetY - boardOffsetY
 
-function mine.rawGetDemoCell(x, y)
-    if x == math.huge or y == math.huge then
-        return nil
-    elseif not gameState.Demo[y] or not gameState.Demo[y][x] then
-        return nil
+        if object.t > 3 then
+            -- initially fake the cells prior state
+            local fakeCell = { value = VALUE.MINE, state = object.ps }
+            local isChecker = doChecks and (object.x + object.y) % 2 ~= 0
+            local inHalo = Board:isNeighbor(object.x, object.y, mouseBoardX, mouseBoardY)
+            mine.printCell(textObject, fakeCell, objectScreenX, objectScreenY, isChecker, inHalo)
+        elseif object.t > 1 then
+            -- glitchy cell symbol rotation
+            mine.printToText(
+                textObject,
+                TheorySymbols[love.math.random(1, 128)],
+                Config:getSymbolColor(VALUE.MINE),
+                objectScreenX, objectScreenY)
+        elseif object.t < 1 then
+            -- expanding mine symbol
+            mine.printToText(
+                textObject, VALUE.MINE,
+                Config:getSymbolColor(VALUE.MINE),
+                objectScreenX, objectScreenY,
+                nil,
+                math.floor(8 * (3 - 2 * object.t)) / 8)
+        end
     end
-    return gameState.Demo[y][x]
+
+    -- setup stencils to cull overdraw
+    love.graphics.stencil(function()
+        love.graphics.rectangle('fill',
+            viewOffsetX * gameState.SCALE,
+            viewOffsetY * gameState.SCALE,
+            (viewWidth + 1) * gameState.SCALE,
+            (viewHeight + 1) * gameState.SCALE)
+    end)
+    love.graphics.setStencilTest("greater", 0)
+
+    -- draw board text object
+    love.graphics.draw(textObject)
+
+    -- draw hover outline
+    local screenX = math.floor(gameState.mouseX / gameState.SCALE)
+    local screenY = math.floor(gameState.mouseY / gameState.SCALE)
+
+    if mine.isViewCoordWithinBoard(screenX, screenY) then
+        local xPositionNudge = gameState.xAxisControl:getSmoothedPositionNudge()
+        local yPositionNudge = gameState.yAxisControl:getSmoothedPositionNudge()
+
+        local adjusted_x = math.floor(gameState.SCALE * (screenX - 1 + xPositionNudge))
+        local adjusted_y = math.floor(gameState.SCALE * (screenY - 1 + yPositionNudge))
+
+        love.graphics.rectangle("line", adjusted_x, adjusted_y,
+            3 * gameState.SCALE, 3 * gameState.SCALE)
+    end
+
+    love.graphics.setStencilTest()
+    love.graphics.setCanvas(previousCanvas)
+    love.graphics.draw(canvas)
 end
 
+---print a cell
+---@param text love.Text
+---@param cell? Board.Cell
+---@param x integer
+---@param y integer
+---@param isChecker boolean
+---@param inHalo boolean
 function mine.printCell(text, cell, x, y, isChecker, inHalo)
     local paletteExt = Config:getPaletteExt()
     local tileColor = isChecker
@@ -608,16 +937,35 @@ function mine.printCell(text, cell, x, y, isChecker, inHalo)
         and (inHalo and paletteExt.bghalolite or paletteExt.bglite)
         or (inHalo and paletteExt.bghalodark or paletteExt.bgdark)
 
-    if not cell or cell.state == STATE.UNSEEN or gameState.animatingList[cell] then
+    if not cell then
+        if Board.isGameOver and love.math.random(0, 100) == 100 then
+            mine.printToText(text, TheorySymbols[love.math.random(1, 128)], COLORS.white, x, y,
+                COLORS.black)
+        else
+            mine.printToText(text, "█", tileColor, x, y)
+        end
+    elseif gameState.explodeList[cell] then
+        mine.printToText(text, "█", backColor, x, y)
+    elseif cell.state == STATE.UNSEEN or gameState.animatingList[cell] then
         mine.printToText(text, "█", tileColor, x, y)
     elseif cell.state == STATE.FLAGGED then
         mine.printToText(text, VALUE.FLAG, Config:getSymbolColor(VALUE.FLAG), x, y, tileColor)
+    elseif cell.extra then
+        mine.printToText(text, VALUE.NONE, Config:getSymbolColor(VALUE.NONE), x, y, backColor)
     else
-        mine.printToText(text, cell.value, Config:getSymbolColor(cell.value), x, y, backColor)
+        mine.printToText(text, tostring(cell.value), Config:getSymbolColor(cell.value), x, y, backColor)
     end
 end
 
-function mine.printToText(text, symbol, foreColor, x, y, backColor)
+---write a character to text
+---@param text love.Text
+---@param symbol string
+---@param foreColor RGB
+---@param x integer
+---@param y integer
+---@param backColor? RGB
+---@param overScale? number
+function mine.printToText(text, symbol, foreColor, x, y, backColor, overScale)
     if not symbol or not foreColor then
         print("sym: " .. (symbol and symbol or "F") .. "\tfore: " .. (foreColor and "T" or "F"))
         debug.debug()
@@ -626,6 +974,11 @@ function mine.printToText(text, symbol, foreColor, x, y, backColor)
     local xPositionNudge = gameState.xAxisControl:getSmoothedPositionNudge()
     local yPositionNudge = gameState.yAxisControl:getSmoothedPositionNudge()
 
+    if overScale then
+        x = x - (overScale - 1) / 2
+        y = y - (overScale - 1) / 2
+    end
+
     x = math.floor(gameState.SCALE * (x + xPositionNudge))
     y = math.floor(gameState.SCALE * (y + yPositionNudge))
 
@@ -633,7 +986,7 @@ function mine.printToText(text, symbol, foreColor, x, y, backColor)
         text:add({ backColor, "█" }, x, y)
     end
     if symbol then
-        text:add({ foreColor, symbol }, x, y)
+        text:add({ foreColor, symbol }, x, y, 0, overScale, overScale)
     else
         print("bad cell at [" .. x .. ", " .. y .. "]")
         text:add({ COLORS.red, "█" }, x, y)

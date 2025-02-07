@@ -3,8 +3,19 @@ local Theory = require "AsciiTheory"
 local Style = require "AsciiTheory/Style"
 local Window = require "AsciiTheory/Window"
 local Button = require "AsciiTheory/Button"
-local TextField = require "AsciiTheory/TextField"
-local Pane = require "AsciiTheory/Pane"
+require "AsciiTheory/TextField"
+require "AsciiTheory/Pane"
+
+ManagedObjects = {
+    GameWindow = "GameWindow",
+    ScoreLabel = "ScoreLabel",
+    SignalLostWindow = "SignalLostWindow",
+    SignalDump = "SignalDump",
+    MenuWindow = "MenuWindow",
+    GamemodeDisplay = "GamemodeDisplay",
+    GamemodeDescribe = "GamemodeDescribe",
+    PaletteReadout = "PaletteReadout",
+}
 
 return function()
     --- BEGIN LOAD XP RESOURCES ---
@@ -12,13 +23,14 @@ return function()
         darkest  = { 0 / 255, 0 / 255, 64 / 255 },
         dark     = { 0 / 255, 0 / 255, 178 / 255 },
         normal   = { 0 / 255, 0 / 255, 255 / 255 },
-        light    = { 51 / 255, 51 / 255, 255 / 255 },
+        lighter  = { 51 / 255, 51 / 255, 255 / 255 },
         lightest = { 102 / 255, 102 / 255, 255 / 255 },
     }
 
     Style:newStyles(Window, {
         board = "Assets/UnboundedBoardFrame.xp",
         config = "Assets/UnboundedConfigFrame.xp",
+        signallost = "Assets/UnboundedSignalLost.xp",
     })
     Style:newStyles(Button, {
         new = "Assets/New_Button_Style.xp",
@@ -58,11 +70,11 @@ return function()
     --- BEGIN DEFINE SCENE ---
     local gameWindow = Theory:parse {
         type = "window",
-        id = "gameWindow",
+        id = ManagedObjects.GameWindow,
         style = "board",
         dim = Theory.Dim(0, 0, 47, 50),
         { type = "textField",
-            id = "scoreLabel",
+            id = ManagedObjects.ScoreLabel,
             text = "0000000",
             fg = "lightest",
             bg = "darkest",
@@ -71,74 +83,129 @@ return function()
             horizontalAlign = "center",
         },
         { type = "button",
-            id = "newButton",
             command = "newGame",
             style = 'new',
             dim = Theory.Dim(3, 43, 9, 5),
         },
         { type = "button",
-            id = "menuButton",
             command = "openMenu",
             style = 'menu',
             dim = Theory.Dim(35, 43, 9, 5)
         }
     }
 
-    local menuWindow = Theory:parse {
+    Theory:parse {
         type = "window",
-        id = "menuWindow",
+        id = ManagedObjects.SignalLostWindow,
+        style = "signallost",
+        dim = Theory.Dim(7, 7, 33, 33),
+
+        { type = "textField",
+            text = "SIGNAL LOST",
+            fg = { 1, 1, 0 },
+            bg = { 0, 0, 0 },
+            dim = Theory.Dim(16, 25, 15, 1),
+            horizontalAlign = "center",
+            fillBackground = true,
+        },
+        { type = "textField",
+            id = ManagedObjects.SignalDump,
+            text = "",
+            fg = { 1, 1, 0 },
+            bg = { 0, 0, 0 },
+            dim = Theory.Dim(7, 27, 23, 13),
+            verticalAlign = "max",
+            horizontalAlign = "min",
+        },
+    }
+
+    Theory:parse {
+        type = "window",
+        id = ManagedObjects.MenuWindow,
         style = "config",
         dim = Theory.Dim(0, 0, 47, 50),
 
-        upDownButtons(VALUE.ONE, 12, 13),
-        upDownButtons(VALUE.TWO, 16, 13),
-        upDownButtons(VALUE.THREE, 20, 13),
-        upDownButtons(VALUE.FOUR, 24, 13),
-        upDownButtons(VALUE.FIVE, 28, 13),
+        { type = "button",
+            command = "leftGamemode",
+            style = 'left',
+            dim = Theory.Dim(10, 13, 1, 1)
+        },
+        { type = "textField",
+            id = ManagedObjects.GamemodeDisplay,
+            text = "Normal",
+            fg = "lightest",
+            bg = "darkest",
+            dim = Theory.Dim(11, 13, 9, 1),
+            verticalAlign = "center",
+            horizontalAlign = "center",
+            fillBackground = true,
+        },
+        { type = "button",
+            command = "rightGamemode",
+            style = 'right',
+            dim = Theory.Dim(20, 13, 1, 1)
+        },
+        { type = "textField",
+            id = ManagedObjects.GamemodeDescribe,
+            text = "board is ∞\n" ..
+                VALUE.MINE .. " is lose\n" ..
+                "_ is ₧\n\n" ..
+                "+₧ is +" .. VALUE.MINE .. "\n\n",
+            fg = "lightest",
+            bg = "darkest",
+            dim = Theory.Dim(10, 15, 11, 8),
+            verticalAlign = "center",
+            horizontalAlign = "min",
+            fillBackground = true,
+        },
 
-        upDownButtons(VALUE.SIX, 12, 17),
-        upDownButtons(VALUE.SEVEN, 16, 17),
-        upDownButtons(VALUE.EIGHT, 20, 17),
-        upDownButtons(VALUE.FLAG, 24, 17),
-        upDownButtons(VALUE.MINE, 28, 17),
+        upDownButtons(VALUE.ONE, 11, 31),
+        upDownButtons(VALUE.TWO, 14, 31),
+        upDownButtons(VALUE.THREE, 17, 31),
+        upDownButtons(VALUE.FOUR, 20, 31),
+        upDownButtons(VALUE.FIVE, 23, 31),
+
+        upDownButtons(VALUE.SIX, 11, 34),
+        upDownButtons(VALUE.SEVEN, 14, 34),
+        upDownButtons(VALUE.EIGHT, 17, 34),
+        upDownButtons(VALUE.FLAG, 20, 34),
+        upDownButtons(VALUE.MINE, 23, 34),
 
         { type = "button",
             command = "toggleCheck",
             style = 'check',
-            dim = Theory.Dim(31, 13, 5, 3),
+            dim = Theory.Dim(26, 31, 3, 3),
         },
         { type = "button",
             command = "setToDefault",
             style = 'reset',
-            dim = Theory.Dim(31, 17, 5, 3),
+            dim = Theory.Dim(26, 34, 3, 3),
         },
         { type = "button",
             command = "leftPalette",
             style = 'left',
-            dim = Theory.Dim(12, 29, 1, 1),
+            dim = Theory.Dim(31, 32, 1, 1),
         },
         { type = "textField",
-            id = "paletteReadout",
+            id = ManagedObjects.PaletteReadout,
             text = "000",
             fg = "lightest",
             bg = "darkest",
-            dim = Theory.Dim(13, 29, 3, 1),
+            dim = Theory.Dim(32, 32, 3, 1),
             verticalAlign = "center",
             horizontalAlign = "center",
         },
         { type = "button",
             command = "rightPalette",
             style = 'right',
-            dim = Theory.Dim(16, 29, 1, 1),
+            dim = Theory.Dim(35, 32, 1, 1),
         },
         { type = "button",
-            id = "saveButton",
             command = "saveGame",
             style = 'save',
             dim = Theory.Dim(3, 43, 9, 5),
         },
         { type = "button",
-            id = "backButton",
             command = "closeMenu",
             style = 'back',
             dim = Theory.Dim(35, 43, 9, 5)
