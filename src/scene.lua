@@ -13,6 +13,8 @@ ManagedObjects = {
     SignalDump = "SignalDump",
     MenuWindow = "MenuWindow",
     GamemodeDisplay = "GamemodeDisplay",
+    GamemodeDisplayWindowMenu = "GamemodeDisplayWindowMenu",
+    GamemodeDisplayWindowGame = "GamemodeDisplayWindowGame",
     GamemodeDescribe = "GamemodeDescribe",
     PaletteReadout = "PaletteReadout",
 
@@ -97,7 +99,17 @@ return function()
             command = "openMenu",
             style = 'menu',
             dim = Theory.Dim(35, 43, 9, 5)
-        }
+        },
+        { type = "textField",
+            id = ManagedObjects.GamemodeDisplayWindowGame,
+            text = "Normal",
+            fg = "lightest",
+            bg = "darkest",
+            dim = Theory.Dim(19, 42, 9, 1),
+            verticalAlign = "center",
+            horizontalAlign = "center",
+            fillBackground = true,
+        },
     }
 
     Theory:parse {
@@ -162,6 +174,16 @@ return function()
             dim = Theory.Dim(10, 15, 11, 8),
             verticalAlign = "center",
             horizontalAlign = "min",
+            fillBackground = true,
+        },
+        { type = "textField",
+            id = ManagedObjects.GamemodeDisplayWindowMenu,
+            text = "Normal",
+            fg = "lightest",
+            bg = "darkest",
+            dim = Theory.Dim(19, 42, 9, 1),
+            verticalAlign = "center",
+            horizontalAlign = "center",
             fillBackground = true,
         },
 

@@ -256,10 +256,17 @@ function mine.updateGamemode(forceSet)
         return
     end
 
+    local displayGame = Theory:getElementById(ManagedObjects.GamemodeDisplayWindowGame) --[[@as TextField]]
+    local displayMenu = Theory:getElementById(ManagedObjects.GamemodeDisplayWindowMenu) --[[@as TextField]]
+
     gameState.gameMode = Config:getGameMode()
     if gameState.gameMode == GAME_MODE.NORMAL then
+        displayGame:setText("Normal")
+        displayMenu:setText("Normal")
         Board:setNoGuess(false)
     elseif gameState.gameMode == GAME_MODE.HARD then
+        displayGame:setText("Hard")
+        displayMenu:setText("Hard")
         Board:setNoGuess(true)
     end
 end
@@ -677,25 +684,25 @@ function mine.bindPressed(bind)
         if gameState.isMenuNavigating then
             Theory:navigateKeyMode(THEORY_NAV_DIRECTION.UP)
         else
-        gameState.yAxisControl:keyDown(-1)
+            gameState.yAxisControl:keyDown(-1)
         end
     elseif bind == "DOWN" then
         if gameState.isMenuNavigating then
             Theory:navigateKeyMode(THEORY_NAV_DIRECTION.DOWN)
         else
-        gameState.yAxisControl:keyDown(1)
+            gameState.yAxisControl:keyDown(1)
         end
     elseif bind == "LEFT" then
         if gameState.isMenuNavigating then
             Theory:navigateKeyMode(THEORY_NAV_DIRECTION.LEFT)
         else
-        gameState.xAxisControl:keyDown(-1)
+            gameState.xAxisControl:keyDown(-1)
         end
     elseif bind == "RIGHT" then
         if gameState.isMenuNavigating then
             Theory:navigateKeyMode(THEORY_NAV_DIRECTION.RIGHT)
         else
-        gameState.xAxisControl:keyDown(1)
+            gameState.xAxisControl:keyDown(1)
         end
     elseif bind == "KEYBOARD_RIGHT_CLICK" then
         if gameState.isMenuNavigating then
@@ -770,24 +777,24 @@ function mine.bindReleased(bind)
     if not bind then return end
 
     if not gameState.isMenuNavigating then
-    if bind == "UP" then
-        gameState.yAxisControl:keyUp(-1)
-    elseif bind == "DOWN" then
-        gameState.yAxisControl:keyUp(1)
-    elseif bind == "LEFT" then
-        gameState.xAxisControl:keyUp(-1)
-    elseif bind == "RIGHT" then
-        gameState.xAxisControl:keyUp(1)
-    end
+        if bind == "UP" then
+            gameState.yAxisControl:keyUp(-1)
+        elseif bind == "DOWN" then
+            gameState.yAxisControl:keyUp(1)
+        elseif bind == "LEFT" then
+            gameState.xAxisControl:keyUp(-1)
+        elseif bind == "RIGHT" then
+            gameState.xAxisControl:keyUp(1)
+        end
     end
 end
 
 function love.gamepadaxis(_joystick, axis, value)
     if not gameState.isMenuNavigating then
-    if axis == "leftx" then
-        gameState.xAxisControl:axisUpdate(value)
-    elseif axis == "lefty" then
-        gameState.yAxisControl:axisUpdate(value)
+        if axis == "leftx" then
+            gameState.xAxisControl:axisUpdate(value)
+        elseif axis == "lefty" then
+            gameState.yAxisControl:axisUpdate(value)
         end
     end
 end
