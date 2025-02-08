@@ -35,6 +35,7 @@ local mine = {}
 ---@field LossAnimationState table | nil
 ---@field AnimatingLoss boolean | nil
 ---@field keyboardNavigation boolean | nil
+---@field isMenuNavigating boolean | nil
 ---@field mapMode boolean | nil
 ---@field updateGamemodeOnNewGame boolean | nil
 local gameState = {}
@@ -305,6 +306,13 @@ end
 
 function mine.setUIState(state)
     local currentState = gameState.UIState
+
+    if gameState.isMenuNavigating then
+        Theory:setFocused(
+            state == UI_STATE.GAME
+            and ManagedObjects.BtnOpenMenu
+            or ManagedObjects.BtnCloseMenu)
+    end
 
     gameState.UIStateChangeCanvasesDrawn = false
     gameState.UIStateChangeProgress = 0
@@ -578,6 +586,12 @@ function mine.actOnBoard(x, y, isPrimary)
 end
 
 function love.mousepressed(x, y, button)
+    if gameState.isMenuNavigating or gameState.keyboardNavigation then
+        gameState.isMenuNavigating = false
+        gameState.keyboardNavigation = false
+        return
+    end
+
     Theory:mousepressed(x, y, button)
 
     mine.actOnBoard(x, y, button == 1)
@@ -591,6 +605,7 @@ local KeyBindings = {
         RIGHT = "d",
         KEYBOARD_RIGHT_CLICK = "k",
         KEYBOARD_LEFT_CLICK = "j",
+        KEYBOARD_NAVIGATE = "l",
         MOUSE_MODE = "m",
         MAP_MODE = "z",
         MAP_ZOOM_IN = "=",
@@ -615,6 +630,7 @@ local GamePadBindings = {
         RIGHT = "dpright",
         KEYBOARD_RIGHT_CLICK = "b",
         KEYBOARD_LEFT_CLICK = "a",
+        KEYBOARD_NAVIGATE = "y",
         MAP_MODE = "x",
     },
     {}
@@ -636,19 +652,55 @@ local GamePadMap = bindingToMap(GamePadBindings)
 
 function love.keypressed(key)
     local bind = KeyMap[1][key] or KeyMap[2][key]
+    mine.bindPressed(bind)
+end
 
+function love.keyreleased(key)
+    local bind = KeyMap[1][key] or KeyMap[2][key]
+    mine.bindReleased(bind)
+end
+
+function love.gamepadpressed(_joystick, button)
+    local bind = GamePadMap[1][button] or GamePadMap[2][button]
+    mine.bindPressed(bind)
+end
+
+function love.gamepadreleased(_joystick, button)
+    local bind = GamePadMap[1][button] or GamePadMap[2][button]
+    mine.bindReleased(bind)
+end
+
+function mine.bindPressed(bind)
     if not bind then return end
 
     if bind == "UP" then
+        if gameState.isMenuNavigating then
+            Theory:navigateKeyMode(THEORY_NAV_DIRECTION.UP)
+        else
         gameState.yAxisControl:keyDown(-1)
+        end
     elseif bind == "DOWN" then
+        if gameState.isMenuNavigating then
+            Theory:navigateKeyMode(THEORY_NAV_DIRECTION.DOWN)
+        else
         gameState.yAxisControl:keyDown(1)
+        end
     elseif bind == "LEFT" then
+        if gameState.isMenuNavigating then
+            Theory:navigateKeyMode(THEORY_NAV_DIRECTION.LEFT)
+        else
         gameState.xAxisControl:keyDown(-1)
+        end
     elseif bind == "RIGHT" then
+        if gameState.isMenuNavigating then
+            Theory:navigateKeyMode(THEORY_NAV_DIRECTION.RIGHT)
+        else
         gameState.xAxisControl:keyDown(1)
+        end
     elseif bind == "KEYBOARD_RIGHT_CLICK" then
-        if gameState.keyboardNavigation then
+        if gameState.isMenuNavigating then
+
+        elseif gameState.keyboardNavigation then
             mine.actOnBoard(gameState.mouseX, gameState.mouseY, false)
         elseif not gameState.mapMode then
             gameState.keyboardNavigation = true
@@ -656,12 +708,32 @@ function love.keypressed(key)
             gameState.mouseY = (gameState.VIEW_OFFSET_Y + gameState.VIEW_HEIGHT / 2) * gameState.SCALE
         end
     elseif bind == "KEYBOARD_LEFT_CLICK" then
-        if gameState.keyboardNavigation then
+        if gameState.isMenuNavigating then
+            Theory:clickKeyMode()
+        elseif gameState.keyboardNavigation then
             mine.actOnBoard(gameState.mouseX, gameState.mouseY, true)
+        end
+    elseif bind == "KEYBOARD_NAVIGATE" then
+        if not gameState.isMenuNavigating then
+            gameState.keyboardNavigation = false
+            gameState.isMenuNavigating = true
+            Theory:setMouseMode(false)
+            Theory:setFocused(
+                gameState.UIState == UI_STATE.GAME
+                and ManagedObjects.BtnOpenMenu
+                or ManagedObjects.BtnCloseMenu
+            )
+        else
+            gameState.keyboardNavigation = true
+            gameState.mouseX = (gameState.VIEW_OFFSET_X + gameState.VIEW_WIDTH / 2) * gameState.SCALE
+            gameState.mouseY = (gameState.VIEW_OFFSET_Y + gameState.VIEW_HEIGHT / 2) * gameState.SCALE
+            gameState.isMenuNavigating = false
+            Theory:setMouseMode(true)
         end
     elseif bind == "MOUSE_MODE" then
         if gameState.keyboardNavigation then
             gameState.keyboardNavigation = false
+            gameState.isMenuNavigating = false
         end
     elseif bind == "MAP_MODE" then
         gameState.mapMode = not gameState.mapMode
@@ -694,10 +766,10 @@ function love.keypressed(key)
     end
 end
 
-function love.keyreleased(key)
-    local bind = KeyMap[1][key] or KeyMap[2][key]
+function mine.bindReleased(bind)
     if not bind then return end
 
+    if not gameState.isMenuNavigating then
     if bind == "UP" then
         gameState.yAxisControl:keyUp(-1)
     elseif bind == "DOWN" then
@@ -707,65 +779,16 @@ function love.keyreleased(key)
     elseif bind == "RIGHT" then
         gameState.xAxisControl:keyUp(1)
     end
-end
-
-function love.gamepadpressed(_joystick, button)
-    local bind = GamePadMap[1][button] or GamePadMap[2][button]
-    print(button, bind)
-    if not bind then return end
-
-    if bind == "UP" then
-        gameState.yAxisControl:keyDown(-1)
-    elseif bind == "DOWN" then
-        gameState.yAxisControl:keyDown(1)
-    elseif bind == "LEFT" then
-        gameState.xAxisControl:keyDown(-1)
-    elseif bind == "RIGHT" then
-        gameState.xAxisControl:keyDown(1)
-    elseif bind == "KEYBOARD_RIGHT_CLICK" then
-        if gameState.keyboardNavigation then
-            mine.actOnBoard(gameState.mouseX, gameState.mouseY, false)
-        elseif not gameState.mapMode then
-            gameState.keyboardNavigation = true
-            gameState.mouseX = (gameState.VIEW_OFFSET_X + gameState.VIEW_WIDTH / 2) * gameState.SCALE
-            gameState.mouseY = (gameState.VIEW_OFFSET_Y + gameState.VIEW_HEIGHT / 2) * gameState.SCALE
-        end
-    elseif bind == "KEYBOARD_LEFT_CLICK" then
-        if gameState.keyboardNavigation then
-            mine.actOnBoard(gameState.mouseX, gameState.mouseY, true)
-        end
-    elseif bind == "MAP_MODE" then
-        gameState.mapMode = not gameState.mapMode
-        if gameState.mapMode then
-            gameState.xAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
-            gameState.yAxisControl:setSpeed(gameState.SCALE / gameState.MAP_SCALE)
-        else
-            gameState.xAxisControl:setSpeed(1)
-            gameState.yAxisControl:setSpeed(1)
-        end
-    end
-end
-
-function love.gamepadreleased(_joystick, button)
-    local bind = GamePadMap[1][button] or GamePadMap[2][button]
-    if not bind then return end
-
-    if bind == "UP" then
-        gameState.yAxisControl:keyUp(-1)
-    elseif bind == "DOWN" then
-        gameState.yAxisControl:keyUp(1)
-    elseif bind == "LEFT" then
-        gameState.xAxisControl:keyUp(-1)
-    elseif bind == "RIGHT" then
-        gameState.xAxisControl:keyUp(1)
     end
 end
 
 function love.gamepadaxis(_joystick, axis, value)
+    if not gameState.isMenuNavigating then
     if axis == "leftx" then
         gameState.xAxisControl:axisUpdate(value)
     elseif axis == "lefty" then
         gameState.yAxisControl:axisUpdate(value)
+        end
     end
 end
 

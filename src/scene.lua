@@ -15,6 +15,10 @@ ManagedObjects = {
     GamemodeDisplay = "GamemodeDisplay",
     GamemodeDescribe = "GamemodeDescribe",
     PaletteReadout = "PaletteReadout",
+
+    BtnNewGame = "BtnNewGame",
+    BtnOpenMenu = "BtnOpenMenu",
+    BtnCloseMenu = "BtnCloseMenu"
 }
 
 return function()
@@ -83,11 +87,13 @@ return function()
             horizontalAlign = "center",
         },
         { type = "button",
+            id = ManagedObjects.BtnNewGame,
             command = "newGame",
             style = 'new',
             dim = Theory.Dim(3, 43, 9, 5),
         },
         { type = "button",
+            id = ManagedObjects.BtnOpenMenu,
             command = "openMenu",
             style = 'menu',
             dim = Theory.Dim(35, 43, 9, 5)
@@ -201,11 +207,12 @@ return function()
             dim = Theory.Dim(35, 32, 1, 1),
         },
         { type = "button",
-            command = "saveGame",
-            style = 'save',
+            command = "newGame",
+            style = 'new',
             dim = Theory.Dim(3, 43, 9, 5),
         },
         { type = "button",
+            id = ManagedObjects.BtnCloseMenu,
             command = "closeMenu",
             style = 'back',
             dim = Theory.Dim(35, 43, 9, 5)
