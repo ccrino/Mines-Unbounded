@@ -18,9 +18,10 @@ local Style = require 'AsciiTheory/Style'
 ---@field public parent? any
 ---@field public tag? integer
 ---@field public children any[]
----@field protected collider any
+---@field public collider any
 ---@field protected drawables any
----@field private __delay number
+---@field public __delay number
+---@field public param any
 local Button = {
 	-- non instance
 	type = "button",

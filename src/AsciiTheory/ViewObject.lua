@@ -67,7 +67,8 @@ function ViewObject:__onMove(dx, dy)
 end
 
 ---paint the view object and children
----@return Layer | nil, Dim | nil
+---@return Layer, Dim
+---@overload fun(): nil, nil
 function ViewObject:paint()
     for _, child in pairs(self.children) do
         self.theory:repaint(child.tag)

@@ -12,11 +12,14 @@ local SymbolDictionary = require "AsciiTheory/SymbolDictionary"
 
 ---@class AsciiTheory
 ---@field private drawables ({ position: Dim, layer: Layer } | nil)[]
+---@field private objects table<integer, ViewObject>
 ---@field private __text love.Text | nil
 ---@field private __idMap table<string, ViewObject>
 ---@field private __commandHandlerMap table<string, fun(param: any)>
 ---@field private __needsRepaint boolean
 ---@field private __objectsToRepaint integer[]
+---@field private __mouseMode boolean
+---@field private __focused Button
 local AsciiTheory      = {
 	drawables = {},
 	layerCount = 1,
@@ -28,6 +31,9 @@ local AsciiTheory      = {
 
 	__needsRepaint = false,
 	__objectsToRepaint = {},
+
+	__mouseMode = true,
+	__focused = nil,
 }
 
 AsciiTheory.Dim        = Dim
@@ -297,6 +303,13 @@ function AsciiTheory:unregisterCommandHandler(command)
 	self.__commandHandlerMap[command] = nil
 end
 
+---sets the theory handling for mouse interaction
+---@param enabled boolean
+function AsciiTheory:setMouseMode(enabled)
+	self.__mouseMode = enabled
+	self:update(0)
+end
+
 ---looks up objects by id
 ---@param id string
 ---@return ViewObject | nil
@@ -322,12 +335,20 @@ end
 ---love update handler
 ---@param dt number time since last update
 function AsciiTheory:update(dt)
-	local x, y = love.mouse.getPosition()
+	local x, y
+	if self.__mouseMode then
+		x, y = love.mouse.getPosition()
+	else
+		x, y = -1, -1
+	end
 	self.mouse:moveTo(x, y)
 	for tag, object in pairs(self.objects) do
 		if object.__delay then
+			---@cast object +Button
 			if object.__delay <= 0 then
-				if object.collider and object.collider:collidesWith(self.mouse) then
+				if object.collider and (
+						(self.__mouseMode and object.collider:collidesWith(self.mouse))
+						or (not self.__mouseMode and self.__focused == object)) then
 					-- mouse over actions
 					if object.state and object.state ~= "hovered" then
 						object.state = "hovered"
@@ -460,7 +481,11 @@ end
 ---@param _button any
 ---@param _istouch any
 function AsciiTheory:mousepressed(x, y, _button, _istouch)
+	if not self.__mouseMode then
+		self:setMouseMode(true)
+	end
 	for tag, object in pairs(self.objects) do
+		---@cast object +Button
 		if object.collider and object.collider:contains(x, y) then
 			if object.command ~= nil then
 				if self.__commandHandlerMap[object.command] then
@@ -481,6 +506,98 @@ end
 ---@param _istouch any
 function AsciiTheory:mousereleased(_x, _y, _button, _istouch)
 	--sliderLock = nil
+end
+
+---sets the focused element of the theory for NavigationKey mode
+---@param object ViewObject | string | integer
+function AsciiTheory:setFocused(object)
+	if type(object) == "number" then
+		object = self.objects[object]
+	elseif type(object) == "string" then
+		local nullableObject = self:getElementById(object)
+		if not nullableObject then return end
+		object = nullableObject
+	end
+
+	---@cast object +Button
+	if not object.collider then
+		return
+	end
+
+	---@cast object Button
+	self.__focused = object
+end
+
+---@enum THEORY_NAV_DIRECTION
+THEORY_NAV_DIRECTION = {
+	LEFT = 1,
+	RIGHT = 2,
+	UP = 3,
+	DOWN = 4,
+}
+
+function AsciiTheory:navigateKeyMode(navDirection)
+	if not self.__focused or not self.__focused.collider then
+		return
+	end
+
+	local CAST_DIST = 100 * 16
+	local cx, cy = self.__focused.collider:center()
+	local scanTriangle
+
+	local xWeight, yWeight = 1, 1
+	if navDirection == THEORY_NAV_DIRECTION.LEFT then
+		xWeight, yWeight = 1, 16
+		scanTriangle = HC.polygon(cx, cy, cx - CAST_DIST, cy + CAST_DIST, cx - CAST_DIST, cy - CAST_DIST)
+	elseif navDirection == THEORY_NAV_DIRECTION.RIGHT then
+		xWeight, yWeight = 1, 16
+		scanTriangle = HC.polygon(cx, cy, cx + CAST_DIST, cy + CAST_DIST, cx + CAST_DIST, cy - CAST_DIST)
+	elseif navDirection == THEORY_NAV_DIRECTION.UP then
+		xWeight, yWeight = 16, 1
+		scanTriangle = HC.polygon(cx, cy, cx + CAST_DIST, cy - CAST_DIST, cx - CAST_DIST, cy - CAST_DIST)
+	elseif navDirection == THEORY_NAV_DIRECTION.DOWN then
+		xWeight, yWeight = 16, 1
+		scanTriangle = HC.polygon(cx, cy, cx + CAST_DIST, cy + CAST_DIST, cx - CAST_DIST, cy + CAST_DIST)
+	end
+
+	local collides = HC.collisions(scanTriangle)
+	local minDistance = 1000
+	---@type Button | nil
+	local minCandidate = nil
+	for _, candidate in pairs(self.objects) do
+		---@cast candidate +Button
+		if candidate ~= self.__focused
+			and candidate.collider
+			and candidate.type == "button"
+			and collides[candidate.collider] then
+			local ocx, ocy = candidate.collider:center()
+			local distance = math.sqrt(xWeight * (cx - ocx) ^ 2 + yWeight * (cy - ocy) ^ 2)
+
+			if distance < minDistance then
+				minDistance = distance
+				minCandidate = candidate --[[@as Button]]
+			end
+		end
+	end
+
+	if minCandidate then
+		self.__focused = minCandidate
+	end
+end
+
+function AsciiTheory:clickKeyMode()
+	if not self.__focused or not self.__focused.command then
+		return
+	end
+
+	local object = self.__focused --[[@as Button]]
+
+	if self.__commandHandlerMap[object.command] then
+		self.__commandHandlerMap[object.command](object.param)
+	end
+	object.__delay = .25
+	object.state = "pressed"
+	self:repaint(object.tag)
 end
 
 return AsciiTheory
