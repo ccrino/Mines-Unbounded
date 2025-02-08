@@ -197,7 +197,7 @@ function commands.newGame()
     gameState.explodeList = {}
     if gameState.updateGamemodeOnNewGame then
         gameState.updateGamemodeOnNewGame = nil
-        mine.updateGamemode()
+        mine.updateGamemode(true)
     end
     Board:newGame()
 end
@@ -248,9 +248,9 @@ function commands.rightPalette()
     updatePalette()
 end
 
-function mine.updateGamemode()
+function mine.updateGamemode(forceSet)
     -- if in progress cache off game mode for later
-    if Board.begun then
+    if Board.begun and not forceSet then
         gameState.updateGamemodeOnNewGame = true
         return
     end
