@@ -820,11 +820,11 @@ function mine.printMapMode()
 
     local cellOffsetX = gameState.xAxisControl:getPosition()
         - xBoardZoomInset
-        - gameState.xAxisControl:getSmoothedPositionOffset()
+        - math.floor(gameState.xAxisControl:getSmoothedPositionNudge())
 
     local cellOffsetY = gameState.yAxisControl:getPosition()
         - yBoardZoomInset
-        - gameState.yAxisControl:getSmoothedPositionOffset()
+        - math.floor(gameState.yAxisControl:getSmoothedPositionNudge())
 
     local viewOffsetX = gameState.VIEW_OFFSET_X * gameState.SCALE
     local viewOffsetY = gameState.VIEW_OFFSET_Y * gameState.SCALE
@@ -921,14 +921,11 @@ function mine.printBoardInternal(canvas, textObject,
     )
     local doChecks = Config:getShowChecks()
 
-    local xPositionAdjust = gameState.xAxisControl:getSmoothedPositionOffset()
-    local yPositionAdjust = gameState.yAxisControl:getSmoothedPositionOffset()
-
     -- handle normal cells
     for y = viewOffsetY - 1, viewOffsetY + viewHeight + 1 do
         for x = viewOffsetX - 1, viewOffsetX + viewWidth + 1 do
             local cellX, cellY = mine.viewToBoard(x, y, viewOffsetX, viewOffsetY, boardOffsetX, boardOffsetY)
-            local cell = boardAccessor:rawGetCell(cellX + xPositionAdjust, cellY + yPositionAdjust)
+            local cell = boardAccessor:rawGetCell(cellX, cellY)
             local isChecker = doChecks and (cellX + cellY) % 2 ~= 0
             local inHalo = Board:isNeighbor(cellX, cellY, mouseBoardX, mouseBoardY)
 
@@ -982,7 +979,7 @@ function mine.printBoardInternal(canvas, textObject,
     local screenX = math.floor(gameState.mouseX / gameState.SCALE)
     local screenY = math.floor(gameState.mouseY / gameState.SCALE)
 
-    if mine.isViewCoordWithinBoard(screenX, screenY) then
+    if mine.isViewCoordWithinBoard(screenX, screenY, viewOffsetX, viewOffsetY, viewWidth, viewHeight) then
         local xPositionNudge = gameState.xAxisControl:getSmoothedPositionNudge()
         local yPositionNudge = gameState.yAxisControl:getSmoothedPositionNudge()
 

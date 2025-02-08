@@ -66,6 +66,7 @@ end
 ---@param speed integer
 function AxisControl:setSpeed(speed)
     self.speed = math.floor(speed)
+    self:resetSmoothing()
 end
 
 ---get control movement speed
@@ -80,18 +81,15 @@ function AxisControl:getPosition()
     return self.position
 end
 
----gets the smoothed position offset for the control
----@return integer
-function AxisControl:getSmoothedPositionOffset()
-    local integerPiece = math.modf(self.motionSmoothingOffset)
-    return integerPiece
-end
-
----gets the sub-position offset for the control
+---gets the smoothed offset for the control to lag
 ---@return number
 function AxisControl:getSmoothedPositionNudge()
-    local _, fractionalPiece = math.modf(self.motionSmoothingOffset)
-    return fractionalPiece
+    return self.motionSmoothingOffset
+end
+
+---reset the motion smoothing quotient
+function AxisControl:resetSmoothing()
+    self.motionSmoothingOffset = 0
 end
 
 ---event hook for when the key down is pressed for an axis
@@ -116,6 +114,10 @@ function AxisControl:keyUp(direction)
         self.holdDirection = Utils.clamp(
             self.heldStick + (self.heldKey[-direction] and -direction or 0),
             -1, 1)
+
+        if self.holdDirection == 0 then
+            self.holdDuration = 0
+        end
     end
 end
 
