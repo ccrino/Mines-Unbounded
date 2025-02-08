@@ -11,13 +11,21 @@ local MINE_ESCALATION_RATE = 0.9999
 ---@field onScoreChangeHandler fun(score: integer)?
 ---@field onCellGradualRevealHandler fun(x: integer, y: integer, depth: integer)?
 ---@field cells table<integer, table<integer, Board.Cell>>
+---@field forceNoGuess boolean
 local Board = {
     mineWeight = MINE_ESCALATION_RATE,
     cleared = 0,
     begun = false,
     isGameOver = false,
     cells = {},
+    forceNoGuess = false,
 }
+
+---set the no guess game mode flag
+---@param on boolean
+function Board:setNoGuess(on)
+    self.forceNoGuess = on
+end
 
 ---reset board to state of a new game
 function Board:newGame()
@@ -157,9 +165,14 @@ end
 ---@param x integer
 ---@param y integer
 function Board:revealCell(x, y)
-    local cell = self:getCell(x, y)
+    local cell, isNew = self:getCell(x, y)
     if cell.state ~= STATE.UNSEEN then
         return
+    end
+
+    -- if forcing no guess, newly generated cells being revealed are always mines
+    if isNew and self.forceNoGuess then
+        cell.value = VALUE.MINE
     end
 
     if cell.value == VALUE.MINE then
@@ -174,7 +187,7 @@ function Board:revealCell(x, y)
             self.cleared = self.cleared + 1
         end
 
-        self:decayRegion(x, y)
+        -- self:decayRegion(x, y)
 
         self:onScoreChange()
     end
@@ -225,7 +238,7 @@ function Board:decayRegion(x, y)
         if lcell.value ~= VALUE.MINE then
             local unseenNeighbors = 0
             local mineNeighbors = 0
-            self:doNeighbor(lx, ly, function(llx, lly)
+            self:doNthDistanceNeighbors(2, lx, ly, function(llx, lly)
                 local llcell = self:getCell(llx, lly)
                 if llcell.state ~= STATE.SEEN then
                     unseenNeighbors = unseenNeighbors + 1
@@ -274,15 +287,17 @@ end
 ---if not present, generates a new cell on demand
 ---@param x integer
 ---@param y integer
----@return Board.Cell
+---@return Board.Cell, boolean
 function Board:getCell(x, y)
+    local isNew = false
     if not self.cells[y] then
         self.cells[y] = {}
     end
     if not self.cells[y][x] then
         self.cells[y][x] = self:makeCell()
+        isNew = true
     end
-    return self.cells[y][x]
+    return self.cells[y][x], isNew
 end
 
 ---get the cell without generating on demand

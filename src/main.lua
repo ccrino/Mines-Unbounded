@@ -36,6 +36,7 @@ local mine = {}
 ---@field AnimatingLoss boolean | nil
 ---@field keyboardNavigation boolean | nil
 ---@field mapMode boolean | nil
+---@field updateGamemodeOnNewGame boolean | nil
 local gameState = {}
 
 ---@enum UI_STATE
@@ -84,6 +85,9 @@ function love.load()
         VIEW_HEIGHT = 32,
         SCREEN_HEIGHT = 50,
         SCREEN_WIDTH = 47,
+
+        gameMode = GAME_MODE.NORMAL,
+
         --view variables
         boardCanvas = love.graphics.newCanvas(),
         boardText = love.graphics.newText(font),
@@ -168,6 +172,8 @@ function love.load()
         yAxisControl = AxisControl:new(),
     }
 
+    mine.updateGamemodeDisplay()
+    mine.updateGamemode()
 
     Board:setScoreChangeHandler(function(score)
         local scoreStr = Utils.zeroLeftPad(score, 7)
@@ -189,6 +195,10 @@ function commands.newGame()
     mine.hideLossAnimation()
     gameState.animatingList = {}
     gameState.explodeList = {}
+    if gameState.updateGamemodeOnNewGame then
+        gameState.updateGamemodeOnNewGame = nil
+        mine.updateGamemode()
+    end
     Board:newGame()
 end
 
@@ -238,15 +248,59 @@ function commands.rightPalette()
     updatePalette()
 end
 
-local function updateGamemode()
+function mine.updateGamemode()
+    -- if in progress cache off game mode for later
+    if Board.begun then
+        gameState.updateGamemodeOnNewGame = true
+        return
+    end
+
+    gameState.gameMode = Config:getGameMode()
+    if gameState.gameMode == GAME_MODE.NORMAL then
+        Board:setNoGuess(false)
+    elseif gameState.gameMode == GAME_MODE.HARD then
+        Board:setNoGuess(true)
+    end
+end
+
+function mine.updateGamemodeDisplay()
+    local gamemodeDisplay = Theory:getElementById(ManagedObjects.GamemodeDisplay) --[[@as TextField]]
+    local gamemodeDescribe = Theory:getElementById(ManagedObjects.GamemodeDescribe) --[[@as TextField]]
+
+    local selectedGamemode = Config:getGameMode()
+    if selectedGamemode == GAME_MODE.NORMAL then
+        gamemodeDisplay:setText("Normal")
+        gamemodeDescribe:setText([[
+            board = ∞
+
+            * = lose
+            _ = ₧
+            ↑₧ = ↑*%
+
+        ]])
+    elseif selectedGamemode == GAME_MODE.HARD then
+        gamemodeDisplay:setText("Hard")
+        gamemodeDescribe:setText([[
+            board = ∞
+
+            * = lose
+            _ = ₧
+            ↑₧ = ↑*%
+            no guesses
+        ]])
+    end
 end
 
 function commands.leftGamemode()
-    updateGamemode()
+    Config:rotateGameMode(-1)
+    mine.updateGamemodeDisplay()
+    mine.updateGamemode()
 end
 
 function commands.rightGamemode()
-    updateGamemode()
+    Config:rotateGameMode(1)
+    mine.updateGamemodeDisplay()
+    mine.updateGamemode()
 end
 
 function mine.setUIState(state)

@@ -149,6 +149,13 @@ end
 
 local CONFIG_FILE = "unbounded.config"
 
+---@enum GAME_MODE
+GAME_MODE = {
+    NORMAL = 1,
+    HARD = 2,
+}
+local GAME_MODE_COUNT = 2
+
 ---@class Config
 ---@field private paletteIndex integer
 ---@field private symbolColors table<VALUE, integer>
@@ -169,11 +176,16 @@ local Config = {
         [VALUE.EIGHT] = 9,
     },
     doCheckers = true,
+    gameMode = GAME_MODE.NORMAL,
 }
 
 ---resets config to default values
-function Config:setDefault(skipPalette)
-    if not skipPalette then self.paletteIndex = 1 end
+---@param visualFineTuneOnly? boolean flag to only set defaults for visual fine tuning settings
+function Config:setDefault(visualFineTuneOnly)
+    if not visualFineTuneOnly then
+        self.paletteIndex = 1
+        self.gameMode = GAME_MODE.NORMAL
+    end
     self.symbolColors[VALUE.FLAG] = 6
     self.symbolColors[VALUE.MINE] = 1
     self.symbolColors[VALUE.NONE] = 1 -- never used
@@ -285,12 +297,24 @@ function Config:toggleShowChecks()
     self.doCheckers = not self.doCheckers
 end
 
+---gets the configured gameMode
+---@return GAME_MODE
+function Config:getGameMode()
+    return self.gameMode
+end
+
+---rotates  the selected gameMode
+---@param direction direction
+function Config:rotateGameMode(direction)
+    self.gameMode = Utils.wrap(self.gameMode + direction, 1, GAME_MODE_COUNT)
+end
+
 ---loads a saved configuration file from the system
 function Config:load()
     local file = io.open(CONFIG_FILE, "r")
     if not file then return end
 
-    local size = love.data.getPackedSize("HBBBBBBBBBBBB")
+    local size = love.data.getPackedSize("HBBBBBBBBBBBBH")
     local data = file:read(size)
     local valid
     ---@diagnostic disable-next-line: assign-type-mismatch
@@ -306,7 +330,8 @@ function Config:load()
     self.symbolColors[VALUE.SIX],
     self.symbolColors[VALUE.SEVEN],
     self.symbolColors[VALUE.EIGHT], ---@diagnostic disable-next-line: assign-type-mismatch
-    self.doCheckers = pcall(love.data.unpack, "HBBBBBBBBBBBB", data)
+    self.doCheckers, ---@diagnostic disable-next-line: assign-type-mismatch
+    self.gameMode = pcall(love.data.unpack, "HBBBBBBBBBBBBH", data)
 
     if not valid then
         self:setDefault()
@@ -321,7 +346,7 @@ function Config:save()
     if not file then return end
 
     ---@diagnostic disable-next-line: param-type-mismatch
-    file:write(love.data.pack("string", "HBBBBBBBBBBBB",
+    file:write(love.data.pack("string", "HBBBBBBBBBBBBH",
         self.paletteIndex,
         self.symbolColors[VALUE.FLAG],
         self.symbolColors[VALUE.MINE],
@@ -334,7 +359,8 @@ function Config:save()
         self.symbolColors[VALUE.SIX],
         self.symbolColors[VALUE.SEVEN],
         self.symbolColors[VALUE.EIGHT],
-        self.doCheckers and 1 or 0))
+        self.doCheckers and 1 or 0,
+        self.gameMode))
     file:close()
 end
 
