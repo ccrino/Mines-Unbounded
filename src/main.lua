@@ -189,7 +189,10 @@ function love.load()
         local cell = Board:getCell(x, y)
         gameState.explodeList[cell] = { t = 1 + (distance / 4), x = x, y = y, ps = priorState }
     end)
-    Board:newGame()
+
+    if not mine.loadSavedBoard() then
+        Board:newGame()
+    end
 end
 
 function commands.newGame()
@@ -249,7 +252,7 @@ function commands.rightPalette()
     updatePalette()
 end
 
-function mine.updateGamemode(forceSet)
+function mine.updateGamemode(forceSet, overrideGamemode)
     -- if in progress cache off game mode for later
     if Board.begun and not forceSet then
         gameState.updateGamemodeOnNewGame = true
@@ -259,15 +262,20 @@ function mine.updateGamemode(forceSet)
     local displayGame = Theory:getElementById(ManagedObjects.GamemodeDisplayWindowGame) --[[@as TextField]]
     local displayMenu = Theory:getElementById(ManagedObjects.GamemodeDisplayWindowMenu) --[[@as TextField]]
 
-    gameState.gameMode = Config:getGameMode()
+    if not overrideGamemode then
+        gameState.gameMode = Config:getGameMode()
+    else
+        gameState.gameMode = overrideGamemode
+    end
+
+    Board:setGameMode(gameState.gameMode)
+
     if gameState.gameMode == GAME_MODE.NORMAL then
         displayGame:setText("Normal")
         displayMenu:setText("Normal")
-        Board:setNoGuess(false)
     elseif gameState.gameMode == GAME_MODE.HARD then
         displayGame:setText("Hard")
         displayMenu:setText("Hard")
-        Board:setNoGuess(true)
     end
 end
 
@@ -1148,8 +1156,16 @@ function mine.viewToBoard(viewX, viewY,
         viewY - viewOffsetY + boardOffsetY
 end
 
-function love.filedropped(file)
-    Board:loadFromFile(file)
+function mine.loadSavedBoard()
+    local file = love.filesystem.newFile("unbounded.save")
+    if file:open("r") then
+        Board:loadFromFile(file)
+        mine.updateGamemode(true, Board.gameMode)
+        file:close()
+        love.filesystem.remove("unbounded.save")
+        return true
+    end
+    return false
 end
 
 function love.quit()
@@ -1170,16 +1186,7 @@ function love.quit()
             return true
         elseif result == 2 then -- save and quit
             local filename = "unbounded.save"
-            local i = 0
-            local file = io.open(filename)
-            while file do
-                file:close()
-                i = i + 1
-                filename = "unbounded" .. i .. ".save"
-                file = io.open(filename)
-            end
             Board:saveToFile(filename)
-            love.window.showMessageBox("Saved", 'game saved as "' .. filename .. '"')
         end
     end
     Config:save()

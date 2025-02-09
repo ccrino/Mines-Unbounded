@@ -44,6 +44,13 @@ VALUE = {
     FLAG = "!", -- false value for consistency
 }
 
+---@enum GAME_MODE
+GAME_MODE = {
+    NORMAL = 1,
+    HARD = 2,
+}
+GAME_MODE_COUNT = 2
+
 --temp colors from previous version
 ---@enum COLORS
 COLORS = {

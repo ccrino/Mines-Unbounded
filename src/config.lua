@@ -146,15 +146,7 @@ for i, set in ipairs(palette_sets) do
 end
 
 
-
 local CONFIG_FILE = "unbounded.config"
-
----@enum GAME_MODE
-GAME_MODE = {
-    NORMAL = 1,
-    HARD = 2,
-}
-local GAME_MODE_COUNT = 2
 
 ---@class Config
 ---@field private paletteIndex integer
@@ -311,8 +303,8 @@ end
 
 ---loads a saved configuration file from the system
 function Config:load()
-    local file = io.open(CONFIG_FILE, "r")
-    if not file then return end
+    local file = love.filesystem.newFile(CONFIG_FILE)
+    if not file:open('r') then return end
 
     local size = love.data.getPackedSize("HBBBBBBBBBBBBH")
     local data = file:read(size)
@@ -336,14 +328,22 @@ function Config:load()
     if not valid then
         self:setDefault()
     else
+        --validate settings are in range
+        for symbol, color in pairs(self.symbolColors) do
+            self.symbolColors[symbol] = Utils.wrap(color, 1, 9)
+        end
         self.doCheckers = (self.doCheckers == 1)
+        self.paletteIndex = Utils.wrap(self.paletteIndex, 1, #palette_sets)
+        self.gameMode = Utils.wrap(self.gameMode, 1, GAME_MODE_COUNT)
     end
+
+    file:close()
 end
 
 ---saves the current configuration into a file
 function Config:save()
-    local file = io.open(CONFIG_FILE, "wb")
-    if not file then return end
+    local file = love.filesystem.newFile(CONFIG_FILE)
+    if not file:open('w') then return end
 
     ---@diagnostic disable-next-line: param-type-mismatch
     file:write(love.data.pack("string", "HBBBBBBBBBBBBH",

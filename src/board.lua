@@ -18,13 +18,25 @@ local Board = {
     begun = false,
     isGameOver = false,
     cells = {},
+    gameMode = GAME_MODE.NORMAL,
     forceNoGuess = false,
 }
 
----set the no guess game mode flag
----@param on boolean
-function Board:setNoGuess(on)
-    self.forceNoGuess = on
+---sets the game mode flag
+---@param gameMode GAME_MODE
+function Board:setGameMode(gameMode)
+    --make sure gamemode is not changed while running
+    if self.begun then
+        return
+    end
+
+    self.gameMode = gameMode
+
+    if self.gameMode == GAME_MODE.NORMAL then
+        self.forceNoGuess = false
+    elseif self.gameMode == GAME_MODE.HARD then
+        self.forceNoGuess = true
+    end
 end
 
 ---reset board to state of a new game
@@ -425,11 +437,14 @@ local savePack = {
 ---loads the board state
 ---@param file love.File
 function Board:loadFromFile(file)
-    local valid, weight, cleared, cells = self:loadFromFileInternal(file)
+    local valid, weight, cleared, cells, settings = self:loadFromFileInternal(file)
     if valid then
+        self:setGameMode(settings.gameMode)
+
         self.mineWeight = weight
         self.cleared = cleared
         self.cells = cells
+
         self.begun = true
         self.isGameOver = false
 
@@ -437,24 +452,33 @@ function Board:loadFromFile(file)
     end
 end
 
+BOARD_FILE_VERSION_NUMBER = 1
+
 ---loads the board state from a file.
 ---@param file love.File
 ---@return true flag indicating validity
 ---@return number weight
 ---@return integer cleared
 ---@return table<integer, table<integer, Board.Cell>> cells
+---@return table settings
 ---@overload fun(file: love.File): false
 function Board:loadFromFileInternal(file)
-    if not file:open("r") then
+    if not file:isOpen() and not file:open("r") then
         love.window.showMessageBox("Error Reading", "could not load the provided file", "error")
         return false
     end
-    local header = file:read(love.data.getPackedSize("nn"))
-    local valid, weight, cleared = pcall(love.data.unpack, "nn", header)
-    if not valid or type(weight) ~= "number" or type(cleared) ~= "number" then
+    local header = file:read(love.data.getPackedSize("Bnn"))
+    local valid, version, weight, cleared = pcall(love.data.unpack, "Bnn", header)
+    if not valid or version ~= BOARD_FILE_VERSION_NUMBER or type(weight) ~= "number" or type(cleared) ~= "number" then
         love.window.showMessageBox("Error Reading", "bad file header.", "error")
         return false
     end
+    local valid, settings = self:loadSettings(file)
+    if not valid then
+        love.window.showMessageBox("Error Reading Save", "bad settings header.", "error")
+        return false
+    end
+
     local cells = {}
     local sizej = love.data.getPackedSize("j")
     local sizejB = love.data.getPackedSize("jB")
@@ -494,15 +518,33 @@ function Board:loadFromFileInternal(file)
             "error")
         return false
     end
-    return true, weight, cleared, cells
+    return true, weight, cleared, cells, settings
+end
+
+---loads settings from file
+---@param file love.File
+---@return boolean
+---@return table
+function Board:loadSettings(file)
+    local settings = {}
+    local settingHeader = file:read(love.data.getPackedSize("B"))
+    local valid, gameMode = pcall(love.data.unpack, "B", settingHeader)
+
+    if valid then
+        if gameMode > GAME_MODE_COUNT then valid = false end
+        settings.gameMode = gameMode
+    end
+
+    return valid, settings
 end
 
 function Board:saveToFile(filename)
-    local file = io.open(filename, "wb")
-    if not file then return end
+    local file = love.filesystem.newFile(filename)
+    if not file:open("w") then return end
 
     ---@diagnostic disable-next-line: param-type-mismatch
-    file:write(love.data.pack("string", "nn", self.mineWeight, self.cleared))
+    file:write(love.data.pack("string", "Bnn", BOARD_FILE_VERSION_NUMBER, self.mineWeight, self.cleared))
+    self:saveSettings(file)
     for y, row in pairs(self.cells) do
         ---@diagnostic disable-next-line: param-type-mismatch
         file:write(love.data.pack("string", "j", y))
@@ -516,6 +558,13 @@ function Board:saveToFile(filename)
         file:write(love.data.pack("string", "jB", 0, 0))
     end
     file:close()
+end
+
+---save game settings required
+---@param file love.File
+function Board:saveSettings(file)
+    local settingsHeader = love.data.pack("string", "B", self.gameMode) --[[@as string]]
+    file:write(settingsHeader)
 end
 
 return Board
